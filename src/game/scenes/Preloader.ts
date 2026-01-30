@@ -45,6 +45,11 @@ export class Preloader extends Scene {
 
         this.load.image("logo", "logo.png");
         this.load.image("star", "star.png");
+
+        // Load tilemap and tile images
+        this.load.tilemapTiledJSON("map", "map.tmj");
+        this.load.image("mvp2-farm", "MVP2/farm.png");
+        this.load.image("mvp2-grass", "MVP2/grass.png");
     }
 
     create() {
@@ -55,4 +60,3 @@ export class Preloader extends Scene {
         this.scene.start("MainMenu");
     }
 }
-

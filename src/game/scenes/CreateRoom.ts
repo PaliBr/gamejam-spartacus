@@ -79,7 +79,7 @@ export class CreateRoom extends Phaser.Scene {
 
         this.initSupabase();
 
-        this.scene.start("MainGameScene", {
+        this.scene.start("RoomInit", {
             localPlayerId: this.localPlayerId,
             roomCode: this.roomCode,
             channel: this.channel,

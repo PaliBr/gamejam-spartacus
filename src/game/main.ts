@@ -5,8 +5,9 @@ import { MainMenu } from "./scenes/MainMenu";
 import { Game } from "phaser";
 import { Preloader } from "./scenes/Preloader";
 import { CreateRoom } from "./scenes/CreateRoom";
-import { MainGameScene } from "./scenes/MainGameScene";
+import { RoomInit } from "./scenes/RoomInit";
 import { JoinRoom } from "./scenes/JoinRoom";
+import { MainGameScene } from "./scenes/MainGameScene";
 
 const config: Phaser.Types.Core.GameConfig = {
     scale: {
@@ -35,6 +36,7 @@ const config: Phaser.Types.Core.GameConfig = {
         GameOver,
         CreateRoom,
         JoinRoom,
+        RoomInit,
         MainGameScene,
     ],
 };

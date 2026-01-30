@@ -8,6 +8,7 @@ export class MainMenu extends Scene {
     logoTween: Phaser.Tweens.Tween | null;
     createRoomButton: GameObjects.Text;
     joinRoomButton: GameObjects.Text;
+    testGameButton: GameObjects.Text;
 
     constructor() {
         super("MainMenu");
@@ -58,6 +59,28 @@ export class MainMenu extends Scene {
                 this.joinRoom();
             });
 
+        this.testGameButton = this.add
+            .text(this.scale.width * 0.5, 464, "Test Game", {
+                fontFamily: "Arial Black",
+                fontSize: 28,
+                color: "#ffffff",
+                stroke: "#000000",
+                strokeThickness: 6,
+                align: "center",
+            })
+            .setOrigin(0.5)
+            .setDepth(100)
+            .setInteractive({ useHandCursor: true })
+            .on("pointerover", () => {
+                this.testGameButton.setColor("#ffff00");
+            })
+            .on("pointerout", () => {
+                this.testGameButton.setColor("#ffffff");
+            })
+            .on("pointerdown", () => {
+                this.testGame();
+            });
+
         EventBus.emit("current-scene-ready", this);
     }
 
@@ -77,6 +100,15 @@ export class MainMenu extends Scene {
         }
 
         this.scene.start("JoinRoom");
+    }
+
+    testGame() {
+        if (this.logoTween) {
+            this.logoTween.stop();
+            this.logoTween = null;
+        }
+
+        this.scene.start("MainGameScene");
     }
 
     changeScene() {

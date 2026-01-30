@@ -1,114 +1,63 @@
+import { EventBus } from "../EventBus";
 import Phaser from "phaser";
-import { supabase } from "../../lib/supabase/client";
 
 export class MainGameScene extends Phaser.Scene {
     gameText: Phaser.GameObjects.Text;
-
-    private channel!: any;
-    private localPlayerId!: string;
-    private roomCode!: string;
-    private roomId?: string;
-    private pollTimer?: Phaser.Time.TimerEvent;
-    private roomInitAttempts = 0;
-
-    private lastBroadcast = 0;
-    private BROADCAST_INTERVAL = 50;
 
     constructor() {
         super("MainGameScene");
     }
 
-    init(data: any) {
-        this.localPlayerId = data.localPlayerId;
-        this.roomCode = data.roomCode;
-        this.channel = data.channel;
-    }
-
-    private async updateRoomPlayersCount() {
-        if (!this.roomId) return;
-
-        const { data, count, error } = await supabase
-            .from("room_players")
-            .select("room_player_id", { count: "exact" })
-            .eq("room_id", this.roomId);
-
-        if (error) {
-            console.error("room_players count error:", error);
-        }
-
-        const total = typeof count === "number" ? count : (data?.length ?? 0);
-
-        if (total >= 2) {
-            this.gameText.setText("Ready to play");
-        } else {
-            this.gameText.setText(`Your room code: ${this.roomCode}`);
-        }
-    }
-
-    private async initRoomPlayersWatcher() {
-        const { data: room, error } = await supabase
-            .from("rooms")
-            .select("room_id")
-            .eq("code", this.roomCode)
-            .single();
-
-        if (error || !room) {
-            this.roomInitAttempts += 1;
-            if (this.roomInitAttempts <= 20) {
-                this.time.delayedCall(500, () => this.initRoomPlayersWatcher());
-            }
-            return;
-        }
-
-        this.roomId = room.room_id;
-
-        await this.updateRoomPlayersCount();
-
-        // Use the SAME channel passed from CreateRoom/JoinRoom
-        this.channel
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "room_players",
-                    filter: `room_id=eq.${this.roomId}`,
-                },
-                async () => {
-                    await this.updateRoomPlayersCount();
-                },
-            )
-            .subscribe();
-
-        this.pollTimer = this.time.addEvent({
-            delay: 1000,
-            loop: true,
-            callback: () => this.updateRoomPlayersCount(),
-        });
-
-        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-            this.pollTimer?.remove();
-        });
-    }
-
     create() {
-        this.gameText = this.add
-            .text(
-                this.scale.width * 0.5,
-                this.scale.height * 0.477,
-                `Your room code: ${this.roomCode}`,
-                {
-                    fontFamily: "Arial Black",
-                    fontSize: 38,
-                    color: "#ffffff",
-                    stroke: "#000000",
-                    strokeThickness: 8,
-                    align: "center",
-                },
-            )
-            .setOrigin(0.5)
-            .setDepth(100);
+        this.cameras.main.setBackgroundColor(0x3a9d23);
 
-        this.initRoomPlayersWatcher();
+        // Create tilemap
+        const map = this.make.tilemap({ key: "map" });
+
+        // Debug: log what tilesets are actually in the map
+        console.log(
+            "Available tilesets:",
+            map.tilesets.map((t) => t.name),
+        );
+
+        // Get the actual tileset names from the loaded map
+        const tilesetNames = map.tilesets.map((t) => t.name);
+
+        // Add the tilesets using the actual names found
+        const tileset1 = map.addTilesetImage(tilesetNames[0], "mvp2-farm");
+        const tileset2 = map.addTilesetImage(
+            tilesetNames[1] || tilesetNames[0],
+            "mvp2-grass",
+        );
+
+        if (tileset1 && tileset2) {
+            const layer = map.createLayer(
+                "Tile Layer 1",
+                [tileset1, tileset2],
+                0,
+                0,
+            );
+            if (layer) {
+                console.log("Layer created successfully");
+            }
+        } else {
+            console.error("Failed to create tileset");
+            console.log("tileset1:", tileset1);
+            console.log("tileset2:", tileset2);
+        }
+
+        const midX = this.scale.width * 0.5;
+
+        this.add
+            .rectangle(
+                midX,
+                this.scale.height * 0.5,
+                4,
+                this.scale.height,
+                0xffffff,
+            )
+            .setDepth(1);
+
+        EventBus.emit("current-scene-ready-3", this);
     }
 }

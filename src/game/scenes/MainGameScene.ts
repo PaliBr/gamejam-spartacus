@@ -1,6 +1,5 @@
 import Phaser from "phaser";
 import { supabase } from "../../lib/supabase/client";
-import { EventBus } from "../EventBus";
 
 export class MainGameScene extends Phaser.Scene {
     gameText: Phaser.GameObjects.Text;
@@ -8,6 +7,10 @@ export class MainGameScene extends Phaser.Scene {
     private channel!: any;
     private localPlayerId!: string;
     private roomCode!: string;
+    private roomId?: string;
+    private roomPlayersChannel?: any;
+    private pollTimer?: Phaser.Time.TimerEvent;
+    private roomInitAttempts = 0;
 
     private lastBroadcast = 0;
     private BROADCAST_INTERVAL = 50;
@@ -22,35 +25,72 @@ export class MainGameScene extends Phaser.Scene {
         this.channel = data.channel;
     }
 
-    private updateReadyText() {
-        const state = this.channel?.presenceState?.() ?? {};
-        const count = Object.keys(state).length;
+    private async updateRoomPlayersCount() {
+        if (!this.roomId) return;
 
-        if (count >= 2) {
-            console.log("2");
+        const { data, count, error } = await supabase
+            .from("room_players")
+            .select("room_player_id", { count: "exact" })
+            .eq("room_id", this.roomId);
+
+        if (error) {
+            console.error("room_players count error:", error);
+        }
+
+        const total = typeof count === "number" ? count : (data?.length ?? 0);
+
+        if (total >= 2) {
             this.gameText.setText("Ready to play");
         } else {
-            console.log("1");
             this.gameText.setText(`Your room code: ${this.roomCode}`);
         }
     }
 
-    private setupPresenceHandlers() {
-        if (!this.channel) return;
+    private async initRoomPlayersWatcher() {
+        const { data: room, error } = await supabase
+            .from("rooms")
+            .select("room_id")
+            .eq("code", this.roomCode)
+            .single();
 
-        this.channel.on("presence", { event: "sync" }, () => {
-            this.updateReadyText();
+        if (error || !room) {
+            this.roomInitAttempts += 1;
+            if (this.roomInitAttempts <= 20) {
+                this.time.delayedCall(500, () => this.initRoomPlayersWatcher());
+            }
+            return;
+        }
+
+        this.roomId = room.room_id;
+
+        await this.updateRoomPlayersCount();
+
+        this.roomPlayersChannel = supabase
+            .channel(`room_players:${this.roomId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "room_players",
+                    filter: `room_id=eq.${this.roomId}`,
+                },
+                async () => {
+                    await this.updateRoomPlayersCount();
+                },
+            )
+            .subscribe();
+
+        this.pollTimer = this.time.addEvent({
+            delay: 1000,
+            loop: true,
+            callback: () => this.updateRoomPlayersCount(),
         });
 
-        this.channel.on("presence", { event: "join" }, () => {
-            this.updateReadyText();
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.roomPlayersChannel?.unsubscribe();
+            this.pollTimer?.remove();
         });
-
-        this.channel.on("presence", { event: "leave" }, () => {
-            this.updateReadyText();
-        });
-
-        this.updateReadyText();
     }
 
     create() {
@@ -71,7 +111,6 @@ export class MainGameScene extends Phaser.Scene {
             .setOrigin(0.5)
             .setDepth(100);
 
-        this.setupPresenceHandlers();
+        this.initRoomPlayersWatcher();
     }
 }
-

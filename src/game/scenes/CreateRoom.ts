@@ -84,6 +84,8 @@ export class CreateRoom extends Phaser.Scene {
             roomCode: this.roomCode,
             channel: this.channel,
         });
+
+        this.scene.stop("CreateRoom");
     }
 }
 

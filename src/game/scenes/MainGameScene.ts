@@ -8,7 +8,6 @@ export class MainGameScene extends Phaser.Scene {
     private localPlayerId!: string;
     private roomCode!: string;
     private roomId?: string;
-    private roomPlayersChannel?: any;
     private pollTimer?: Phaser.Time.TimerEvent;
     private roomInitAttempts = 0;
 
@@ -65,8 +64,8 @@ export class MainGameScene extends Phaser.Scene {
 
         await this.updateRoomPlayersCount();
 
-        this.roomPlayersChannel = supabase
-            .channel(`room_players:${this.roomId}`)
+        // Use the SAME channel passed from CreateRoom/JoinRoom
+        this.channel
             .on(
                 "postgres_changes",
                 {
@@ -88,7 +87,6 @@ export class MainGameScene extends Phaser.Scene {
         });
 
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-            this.roomPlayersChannel?.unsubscribe();
             this.pollTimer?.remove();
         });
     }

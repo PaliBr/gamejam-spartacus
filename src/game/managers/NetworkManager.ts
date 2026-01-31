@@ -33,23 +33,33 @@ export class NetworkManager {
 
         this.actionQueue.push(action);
 
+        // For real-time actions like movement, use broadcast only (fast)
+        // For important state changes, also save to database
+        const skipDatabase = ["hero_move"];
+
         console.log(`📡 Broadcasting action...`);
-        await supabase.channel(`room:${this.roomId}`).send({
+        await supabase.channel(`game:${this.roomId}`).send({
             type: "broadcast",
             event: "action",
             payload: action,
         });
 
-        console.log(`💾 Inserting action to database...`);
-        const { data, error } = await supabase
-            .from("actions")
-            .insert(action)
-            .select();
+        if (!skipDatabase.includes(actionType)) {
+            console.log(`💾 Inserting action to database...`);
+            const { data, error } = await supabase
+                .from("actions")
+                .insert(action)
+                .select();
 
-        if (error) {
-            console.error(`❌ Error inserting action:`, error);
+            if (error) {
+                console.error(`❌ Error inserting action:`, error);
+            } else {
+                console.log(`✅ Action inserted successfully:`, data);
+            }
         } else {
-            console.log(`✅ Action inserted successfully:`, data);
+            console.log(
+                `⚡ Skipping database for real-time action: ${actionType}`,
+            );
         }
 
         return action;

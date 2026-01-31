@@ -20,7 +20,6 @@ export function GameCanvas({
 }: GameCanvasProps) {
     const gameRef = useRef<Phaser.Game | null>(null);
     const channelRef = useRef<RealtimeChannel | null>(null);
-    const actionsChannelRef = useRef<RealtimeChannel | null>(null);
     const [connected, setConnected] = useState(false);
     const [latency, setLatency] = useState(0);
     const [messageCount, setMessageCount] = useState(0);
@@ -30,7 +29,6 @@ export function GameCanvas({
             initializeGame();
 
             await setupRealtimeConnection();
-            await setupActionsListener();
 
             setupEventListeners();
         };
@@ -80,9 +78,61 @@ export function GameCanvas({
     const setupRealtimeConnection = async () => {
         const channel = supabase.channel(`game:${roomId}`, {
             config: {
-                broadcast: { self: false, ack: true },
+                broadcast: { self: false, ack: false }, // Disable ack for faster broadcast
                 presence: { key: playerId },
             },
+        });
+
+        // Listen for broadcast actions (fast, no database)
+        channel.on("broadcast", { event: "action" }, ({ payload }) => {
+            console.log("⚡ Broadcast action received:", payload);
+
+            // Only process if it's not from this player
+            if (payload.player_id !== roomPlayerId) {
+                setMessageCount((prev) => prev + 1);
+
+                // Calculate latency
+                if (payload.timestamp) {
+                    const latency =
+                        Date.now() - new Date(payload.timestamp).getTime();
+                    setLatency(latency);
+                }
+
+                // Handle different action types
+                if (payload.action_type === "hero_move") {
+                    // Send to Phaser
+                    window.dispatchEvent(
+                        new CustomEvent("heroMoved", {
+                            detail: {
+                                playerId: payload.player_id,
+                                playerNumber: payload.action_data.playerNumber,
+                                x: payload.action_data.x,
+                                y: payload.action_data.y,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "send_enemy") {
+                    window.dispatchEvent(
+                        new CustomEvent("enemySent", {
+                            detail: {
+                                playerId: payload.player_id,
+                                enemyType: payload.action_data.enemyType,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "build_tower") {
+                    window.dispatchEvent(
+                        new CustomEvent("towerBuilt", {
+                            detail: {
+                                playerId: payload.player_id,
+                                towerType: payload.action_data.towerType,
+                                x: payload.action_data.x,
+                                y: payload.action_data.y,
+                            },
+                        }),
+                    );
+                }
+            }
         });
 
         // Track presence
@@ -142,162 +192,11 @@ export function GameCanvas({
         channelRef.current = channel;
     };
 
-    const setupActionsListener = async () => {
-        console.log(`🎧 Setting up actions listener for room: ${roomId}`);
-        console.log(`   Current player roomPlayerId: ${roomPlayerId}`);
-        console.log(`   Current player number: ${playerNumber}`);
-
-        // First, check if there are any existing actions
-        const { data: existingActions, error: queryError } = await supabase
-            .from("actions")
-            .select("*")
-            .eq("room_id", roomId)
-            .order("timestamp", { ascending: false })
-            .limit(5);
-
-        if (queryError) {
-            console.error("❌ Error querying actions:", queryError);
-        } else {
-            console.log("📋 Existing actions in DB:", existingActions);
-        }
-
-        const actionsChannel = supabase
-            .channel(`db-actions:${roomId}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "actions",
-                    filter: `room_id=eq.${roomId}`,
-                },
-                (payload) => {
-                    const action = payload.new;
-                    console.log("🔔 New action received:", action);
-                    console.log("  - Action player_id:", action.player_id);
-                    console.log(
-                        "  - Action player_id type:",
-                        typeof action.player_id,
-                    );
-                    console.log("  - Current roomPlayerId:", roomPlayerId);
-                    console.log(
-                        "  - Current roomPlayerId type:",
-                        typeof roomPlayerId,
-                    );
-                    console.log(
-                        "  - Exact match (===)?",
-                        action.player_id === roomPlayerId,
-                    );
-                    console.log(
-                        "  - Loose match (==)?",
-                        action.player_id == roomPlayerId,
-                    );
-
-                    // Only process if it's not from this player
-                    if (action.player_id !== roomPlayerId) {
-                        console.log("✅ Processing action from other player");
-                        setMessageCount((prev) => prev + 1);
-
-                        if (action.action_type === "hero_move") {
-                            console.log(
-                                "🎮 Hero move action detected:",
-                                action.action_data,
-                            );
-
-                            // Calculate latency
-                            if (action.timestamp) {
-                                const latency =
-                                    Date.now() -
-                                    new Date(action.timestamp).getTime();
-                                setLatency(latency);
-                            }
-
-                            // Send to Phaser
-                            console.log(
-                                "📢 Dispatching heroMoved event with:",
-                                {
-                                    playerId: action.player_id,
-                                    playerNumber:
-                                        action.action_data.playerNumber,
-                                    x: action.action_data.x,
-                                    y: action.action_data.y,
-                                },
-                            );
-
-                            window.dispatchEvent(
-                                new CustomEvent("heroMoved", {
-                                    detail: {
-                                        playerId: action.player_id,
-                                        playerNumber:
-                                            action.action_data.playerNumber,
-                                        x: action.action_data.x,
-                                        y: action.action_data.y,
-                                    },
-                                }),
-                            );
-                        }
-                    } else {
-                        console.log("⏭️ Skipping action from this player");
-                    }
-                },
-            )
-            .subscribe((status, err) => {
-                console.log(
-                    `📡 Actions channel subscription status: ${status}`,
-                );
-                if (err) {
-                    console.error(`❌ Subscription error:`, err);
-                }
-                if (status === "SUBSCRIBED") {
-                    console.log(
-                        `✅ Actions listener active for room ${roomId}`,
-                    );
-                } else if (status === "CHANNEL_ERROR") {
-                    console.error(`❌ Actions channel error!`);
-                } else if (status === "TIMED_OUT") {
-                    console.error(`⏰ Actions channel timed out!`);
-                } else if (status === "CLOSED") {
-                    console.warn(`🚪 Actions channel closed`);
-                }
-            });
-
-        actionsChannelRef.current = actionsChannel;
-        console.log(`📌 Actions channel reference stored`);
-    };
-
     const setupEventListeners = () => {
-        // Listen for hero movement from Phaser
-        const handleSendHeroMove = async (e: Event) => {
-            const customEvent = e as CustomEvent;
-            const { playerNumber, x, y, timestamp } = customEvent.detail;
-
-            if (!channelRef.current) return;
-
-            // Broadcast to other player
-            await channelRef.current.send({
-                type: "broadcast",
-                event: "hero_move",
-                payload: {
-                    playerNumber,
-                    x,
-                    y,
-                    timestamp,
-                },
-            });
-        };
-
-        window.addEventListener("sendHeroMove", handleSendHeroMove);
-
-        // Cleanup
-        return () => {
-            window.removeEventListener("sendHeroMove", handleSendHeroMove);
-        };
+        // No additional listeners needed - NetworkManager handles broadcasts directly
     };
 
     const cleanup = async () => {
-        if (actionsChannelRef.current) {
-            await supabase.removeChannel(actionsChannelRef.current);
-        }
         if (channelRef.current) {
             await supabase.removeChannel(channelRef.current);
         }

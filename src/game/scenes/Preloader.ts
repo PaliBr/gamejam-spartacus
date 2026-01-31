@@ -45,11 +45,16 @@ export class Preloader extends Scene {
 
         this.load.image("logo", "logo.png");
         this.load.image("star", "star.png");
+        this.load.image("map", "map.png");
 
-        // Load tilemap and tile images
-        this.load.tilemapTiledJSON("map", "map.tmj");
-        this.load.image("mvp2-farm", "MVP2/farm.png");
-        this.load.image("mvp2-grass", "MVP2/grass.png");
+        // Debug: Log when map.png loads
+        this.load.on("filecomplete-image-map", () => {
+            console.log("✅ map.png loaded successfully");
+        });
+
+        this.load.on("loaderror", (file: any) => {
+            console.error("❌ Failed to load file:", file.key, file.src);
+        });
     }
 
     create() {
@@ -58,7 +63,7 @@ export class Preloader extends Scene {
 
         // Create a simple character sprite (placeholder)
         // This creates a 32x32 red rectangle as the character
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+        const graphics = this.add.graphics();
         graphics.fillStyle(0xff0000, 1);
         graphics.fillRect(0, 0, 32, 32);
         graphics.generateTexture("character", 32, 32);

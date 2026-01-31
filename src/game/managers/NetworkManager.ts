@@ -44,7 +44,7 @@ export class NetworkManager {
 
         // For real-time actions like movement, use broadcast only (fast)
         // For important state changes, also save to database
-        const skipDatabase = ["hero_move"];
+        const skipDatabase = ["hero_move", "spawn_enemies", "toggle_mask"];
 
         console.log(`📡 Broadcasting action...`);
         if (this.channel) {
@@ -107,6 +107,11 @@ export class NetworkManager {
                     action.action_data.enemyType,
                     action.player_id,
                 );
+                break;
+            case "spawn_enemies":
+                if (gameScene.spawnEnemies) {
+                    gameScene.spawnEnemies(action.action_data.enemies);
+                }
                 break;
             case "build_tower":
                 gameScene.buildTower(

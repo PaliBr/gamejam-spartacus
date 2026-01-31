@@ -20,9 +20,18 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
     private networkManager: NetworkManager | null;
     public playerId: string;
     public playerNumber: number;
+    public hasMask: boolean = false;
+
+    setHasMask(value: boolean) {
+        this.hasMask = value;
+    }
+
+    getHasMask(): boolean {
+        return this.hasMask;
+    }
 
     constructor(config: CharacterConfig) {
-        super(config.scene, config.x, config.y, "character");
+        super(config.scene, config.x, config.y, "farmer");
 
         this.isLocalPlayer = config.isLocalPlayer;
         this.networkManager = config.networkManager;
@@ -35,11 +44,18 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         config.scene.add.existing(this);
         config.scene.physics.add.existing(this);
 
-        // Visual setup
-        this.setDisplaySize(32, 32);
+        // Visual setup - 40x80 (1x2 grid cells)
+        this.setDisplaySize(40, 80);
         this.setCollideWorldBounds(true);
         this.setBounce(0.2);
         this.setDepth(10); // Make sure character appears above other layers
+        this.setAlpha(1); // Ensure full opacity
+        this.setOrigin(0.5, 0.5); // Center the sprite
+
+        // Start with idle animation if it exists
+        if (config.scene.anims.exists("farmer_idle")) {
+            this.play("farmer_idle");
+        }
 
         console.log(
             `Character created: ${config.playerId} at (${config.x}, ${config.y}), isLocal: ${config.isLocalPlayer}`,
@@ -83,6 +99,20 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
     }
 
     moveTo(x: number, y: number) {
+        const midX = this.scene.scale.width / 2;
+
+        // Check if trying to cross middle line without mask
+        if (!this.hasMask) {
+            const currentSide = this.x < midX ? "left" : "right";
+            const targetSide = x < midX ? "left" : "right";
+
+            // If trying to cross to other side, don't move at all
+            if (currentSide !== targetSide) {
+                console.log(`🚫 Cannot cross middle line without mask!`);
+                return;
+            }
+        }
+
         this.targetX = x;
         this.targetY = y;
         this.isMoving = true;
@@ -95,6 +125,14 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
     update() {
         if (!this.isMoving) {
             this.setVelocity(0, 0);
+            // Play idle animation when not moving
+            if (
+                this.anims &&
+                this.scene.anims.exists("farmer_idle") &&
+                this.anims.currentAnim?.key !== "farmer_idle"
+            ) {
+                this.play("farmer_idle");
+            }
             return;
         }
 
@@ -108,7 +146,30 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
             this.x = this.targetX;
             this.y = this.targetY;
             this.setVelocity(0, 0);
+
+            // Play idle animation when stopped
+            if (this.anims && this.scene.anims.exists("farmer_idle")) {
+                this.play("farmer_idle");
+            }
+
+            // Broadcast final position to network for sync
+            if (this.isLocalPlayer && this.networkManager) {
+                this.networkManager.sendAction("hero_move", {
+                    x: this.targetX,
+                    y: this.targetY,
+                    playerNumber: this.playerNumber,
+                });
+            }
             return;
+        }
+
+        // Play walking animation when moving
+        if (
+            this.anims &&
+            this.scene.anims.exists("farmer_walk") &&
+            this.anims.currentAnim?.key !== "farmer_walk"
+        ) {
+            this.play("farmer_walk");
         }
 
         // Calculate velocity towards target

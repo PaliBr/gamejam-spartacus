@@ -20,6 +20,7 @@ export function GameCanvas({
 }: GameCanvasProps) {
     const gameRef = useRef<Phaser.Game | null>(null);
     const channelRef = useRef<RealtimeChannel | null>(null);
+    const networkManagerRef = useRef<NetworkManager | null>(null);
     const [connected, setConnected] = useState(false);
     const [latency, setLatency] = useState(0);
     const [messageCount, setMessageCount] = useState(0);
@@ -64,6 +65,7 @@ export function GameCanvas({
 
         // Create network manager
         const networkManager = new NetworkManager(roomId, roomPlayerId);
+        networkManagerRef.current = networkManager;
 
         // Start MainGameScene with proper data
         gameRef.current.scene.start("MainGameScene", {
@@ -179,6 +181,11 @@ export function GameCanvas({
                     online_at: new Date().toISOString(),
                 });
                 console.log("📍 Track result:", trackResult);
+
+                // Set channel in NetworkManager for broadcasting
+                if (networkManagerRef.current) {
+                    networkManagerRef.current.setChannel(channel);
+                }
 
                 // Notify Phaser
                 window.dispatchEvent(

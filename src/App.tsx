@@ -1,14 +1,98 @@
-import { useRef } from "react";
-import { IRefPhaserGame, PhaserGame } from "./PhaserGame";
+import { useState } from "react";
+import { CreateRoom } from "./components/CreateRoom";
+import { JoinRoom } from "./components/JoinRoom";
+import { GameLobby } from "./components/GameLobby";
+import { GameCanvas } from "./components/GameCanvas";
+import { v4 as uuidv4 } from "uuid";
+import "./style.css";
 
-function App() {
-    const phaserRef = useRef<IRefPhaserGame | null>(null);
+type GameState = "menu" | "lobby" | "playing";
+
+export default function App() {
+    const [gameState, setGameState] = useState<GameState>("menu");
+    const [roomId, setRoomId] = useState<string | null>(null);
+    const [roomCode, setRoomCode] = useState<string | null>(null);
+    const [playerId, setPlayerId] = useState<string>(uuidv4());
+    const [playerNumber, setPlayerNumber] = useState<number>(0);
+    const [isHost, setIsHost] = useState(false);
+
+    const handleRoomCreated = (id: string, code: string, pId: string) => {
+        console.log("handleRoomCreated called with:", { id, code, pId });
+        setRoomId(id);
+        setRoomCode(code);
+        setPlayerId(pId);
+        setPlayerNumber(1);
+        setIsHost(true);
+        setGameState("lobby");
+        console.log("State updated to lobby");
+    };
+
+    const handleRoomJoined = (
+        id: string,
+        code: string,
+        pId: string,
+        pNum: number,
+    ) => {
+        console.log("handleRoomJoined called with:", { id, code, pId, pNum });
+        setRoomId(id);
+        setRoomCode(code);
+        setPlayerId(pId);
+        setPlayerNumber(pNum);
+        setIsHost(false);
+        setGameState("lobby");
+        console.log("State updated to lobby");
+    };
+
+    const handleGameStart = () => {
+        setGameState("playing");
+    };
 
     return (
-        <div id="app">
-            <PhaserGame ref={phaserRef} />
+        <div
+            className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 
+                    flex items-center justify-center p-4"
+        >
+            {gameState === "menu" && (
+                <div className="space-y-6">
+                    <div className="text-center mb-8">
+                        <h1 className="text-5xl font-bold text-white mb-2">
+                            Tower Defense Multiplayer Name TBD
+                        </h1>
+                        <p className="text-slate-400">
+                            Connection Test Version
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <CreateRoom
+                            onRoomCreated={handleRoomCreated}
+                            onError={(err) => console.error(err)}
+                        />
+                        <JoinRoom
+                            onRoomJoined={handleRoomJoined}
+                            onError={(err) => console.error(err)}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {gameState === "lobby" && roomId && roomCode && (
+                <GameLobby
+                    roomId={roomId}
+                    roomCode={roomCode}
+                    currentPlayerId={playerId}
+                    isHost={isHost}
+                    onGameStart={handleGameStart}
+                />
+            )}
+
+            {gameState === "playing" && roomId && playerId && (
+                <GameCanvas
+                    roomId={roomId}
+                    playerId={playerId}
+                    playerNumber={playerNumber}
+                />
+            )}
         </div>
     );
 }
-
-export default App;

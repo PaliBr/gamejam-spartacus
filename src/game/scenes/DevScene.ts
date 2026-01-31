@@ -3,14 +3,31 @@ import Phaser from "phaser";
 import { Character } from "../objects/Character";
 import { Enemy } from "../objects/Enemy";
 import { Tower } from "../objects/Tower";
+import { Farm } from "../objects/Farm";
+import { FarmPopup } from "../objects/FarmPopup";
 
 export class DevScene extends Phaser.Scene {
     characters: Map<number, Character> = new Map();
     enemies: Map<string, Enemy> = new Map();
     towers: Map<string, Tower> = new Map();
+    farms: Map<string, Farm> = new Map();
+    farmPopup: FarmPopup | null = null;
     targetPositions: Array<{ x: number; y: number }> = [];
     private enemySpawnButton: Phaser.GameObjects.Rectangle | null = null;
     private enemySpawnText: Phaser.GameObjects.Text | null = null;
+    // Food inventory system
+    totalFood: number = 10;
+    private baseFood: number = 10;
+    private farmLastFood: Map<string, number> = new Map();
+    foodBarBg: Phaser.GameObjects.Rectangle | null = null;
+    foodBar: Phaser.GameObjects.Rectangle | null = null;
+    foodText: Phaser.GameObjects.Text | null = null;
+    private foodBarWidth: number = 300;
+    private foodBarHeight: number = 30;
+    private foodBarMaxValue: number = 1000;
+    // Food consumption system
+    private consumptionTimer: number = 0;
+    private gameTime: number = 0; // Track game time in milliseconds
 
     constructor() {
         super("DevScene");
@@ -144,32 +161,52 @@ export class DevScene extends Phaser.Scene {
             )
             .setDepth(1);
 
-        // Targets
+        // Create farms
         const targetSize = 160;
         const targetColors = [0xff0000, 0x0000ff, 0xffff00, 0x00ff00];
         const targetLeftXGrid = [11, 17, 11, 17];
         const targetLeftYGrid = [4, 4, 12, 12];
         const targetRightXGrid = [32, 38, 32, 38];
         const targetRightYGrid = [4, 4, 12, 12];
+        const farmTypes: Array<"wheat" | "carrot" | "sunflower" | "potato"> = [
+            "wheat",
+            "carrot",
+            "sunflower",
+            "potato",
+        ];
 
         targetColors.forEach((color, index) => {
             const x = targetLeftXGrid[index] * 40;
             const y = targetLeftYGrid[index] * 40;
             this.targetPositions.push({ x, y });
-            this.add
-                .rectangle(x, y, targetSize, targetSize, color, 0.3)
-                .setStrokeStyle(3, color, 1)
-                .setDepth(0);
+
+            const farm = new Farm({
+                scene: this,
+                x,
+                y,
+                farmId: `farm-left-${index}`,
+                farmType: farmTypes[index],
+                playerNumber: 1,
+            });
+
+            this.farms.set(farm.farmId, farm);
         });
 
         targetColors.forEach((color, index) => {
             const x = targetRightXGrid[index] * 40;
             const y = targetRightYGrid[index] * 40;
             this.targetPositions.push({ x, y });
-            this.add
-                .rectangle(x, y, targetSize, targetSize, color, 0.3)
-                .setStrokeStyle(3, color, 1)
-                .setDepth(0);
+
+            const farm = new Farm({
+                scene: this,
+                x,
+                y,
+                farmId: `farm-right-${index}`,
+                farmType: farmTypes[index],
+                playerNumber: 1,
+            });
+
+            this.farms.set(farm.farmId, farm);
         });
 
         // Create common target area at bottom center (12x6 grid cells = 480x240px)
@@ -237,9 +274,53 @@ export class DevScene extends Phaser.Scene {
             .setStrokeStyle(2, 0x666666, 0.8)
             .setDepth(0);
 
-        // Tower placement
+        // Create food bar UI at top
+        this.createFoodBar();
+
+        // Tower placement and farm interaction
+        this.farmPopup = new FarmPopup(this);
+
         this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-            this.tryBuildTower(pointer.x, pointer.y);
+            // Close popup if clicking outside
+            if (this.farmPopup && this.farmPopup.isActive()) {
+                this.farmPopup.hide();
+                return;
+            }
+
+            // Check if clicking on a farm
+            let handled = false;
+            this.farms.forEach((farm) => {
+                const distance = Phaser.Math.Distance.Between(
+                    farm.x,
+                    farm.y,
+                    pointer.worldX,
+                    pointer.worldY,
+                );
+
+                // Check if player is within 1 tile (40px) of farm and click on farm area
+                const char = this.characters.get(1);
+                if (char) {
+                    const charDistance = Phaser.Math.Distance.Between(
+                        char.x,
+                        char.y,
+                        farm.x,
+                        farm.y,
+                    );
+
+                    if (charDistance <= 40 && distance < 160) {
+                        // Player within 1 tile and click on farm (160px = 4x4 grid)
+                        this.farmPopup!.show(farm);
+                        handled = true;
+                    }
+                }
+            });
+
+            if (!handled) {
+                this.tryBuildTower(pointer);
+            }
+            if (!handled) {
+                this.tryBuildTower(pointer);
+            }
         });
 
         // Create single player character
@@ -497,7 +578,10 @@ export class DevScene extends Phaser.Scene {
         });
     }
 
-    update() {
+    update(time: number, dt: number) {
+        // Track game time for consumption scaling
+        this.gameTime += dt;
+
         this.characters.forEach((character) => {
             character.update();
         });
@@ -510,6 +594,43 @@ export class DevScene extends Phaser.Scene {
             tower.update(this.enemies);
             tower.flushKilledEnemies();
         });
+
+        // Update all farms (production, enemy detection)
+        this.farms.forEach((farm) => {
+            farm.update(dt, this.enemies);
+        });
+
+        // Apply farm production deltas
+        this.farms.forEach((farm) => {
+            const last = this.farmLastFood.get(farm.farmId) || 0;
+            const delta = farm.totalFood - last;
+            if (delta > 0) {
+                this.baseFood = Math.round((this.baseFood + delta) * 10) / 10;
+            }
+            this.farmLastFood.set(farm.farmId, farm.totalFood);
+        });
+
+        // Food consumption system
+        this.consumptionTimer += dt;
+        if (this.consumptionTimer >= 5000) {
+            // Calculate consumption based on game time (adds 2 each minute, max 16)
+            const minutesPassed = Math.floor(this.gameTime / 60000);
+            const scaledConsumption = Math.min(2 + 2 * minutesPassed, 16);
+
+            const nextFood = Math.max(0, this.baseFood - scaledConsumption);
+            this.baseFood = Math.round(nextFood * 10) / 10;
+            this.consumptionTimer -= 5000;
+
+            console.log(
+                `🍽️ Consumed ${scaledConsumption} food (minute ${minutesPassed}). Remaining: ${this.baseFood.toFixed(1)}`,
+            );
+        }
+
+        // Update food bar display
+        this.updateFoodBar();
+
+        // Apply hunger effects for local player
+        this.applyHungerEffects();
 
         const deadEnemies: string[] = [];
         this.enemies.forEach((enemy, id) => {
@@ -535,63 +656,157 @@ export class DevScene extends Phaser.Scene {
             tower.destroy();
         });
         this.towers.clear();
+
+        this.farms.forEach((farm) => {
+            farm.destroy();
+        });
+        this.farms.clear();
+
+        if (this.farmPopup) {
+            this.farmPopup.destroy();
+            this.farmPopup = null;
+        }
     }
 
-    private tryBuildTower(clickX: number, clickY: number) {
-        const gridSize = 40;
-        const snappedX = Math.round(clickX / gridSize) * gridSize;
-        const snappedY = Math.round(clickY / gridSize) * gridSize;
+    private createFoodBar() {
+        const x = this.scale.width / 2;
+        const y = 25;
 
-        let canBuild = false;
+        // Background bar (dark)
+        this.foodBarBg = this.add
+            .rectangle(x, y, this.foodBarWidth, this.foodBarHeight, 0x333333, 1)
+            .setStrokeStyle(2, 0xffffff, 1)
+            .setDepth(1000);
 
-        this.characters.forEach((character) => {
-            const distance = Phaser.Math.Distance.Between(
-                character.x,
-                character.y,
-                snappedX,
-                snappedY,
-            );
-            if (distance <= 80) {
-                canBuild = true;
-            }
+        // Food fill bar (green/golden) - create with small initial width
+        this.foodBar = this.add
+            .rectangle(
+                x - this.foodBarWidth / 2 + 1,
+                y,
+                2,
+                this.foodBarHeight,
+                0xffcc00,
+                1,
+            )
+            .setOrigin(0.5, 0.5)
+            .setDepth(1001);
+
+        // Food text label
+        this.foodText = this.add.text(x, y, "Food: 10.0", {
+            fontSize: "16px",
+            color: "#ffffff",
+            fontStyle: "bold",
+            fontFamily: "Arial",
         });
+        this.foodText.setOrigin(0.5, 0.5);
+        this.foodText.setDepth(1002);
+    }
 
-        if (!canBuild) {
-            console.log(`❌ Character must be within 2 tiles to build tower`);
+    private updateFoodBar() {
+        this.totalFood = this.baseFood;
+
+        if (!this.foodBar || !this.foodText) return;
+
+        // Calculate bar fill width (proportional to foodBarWidth)
+        const fillPercentage = Math.min(
+            this.totalFood / this.foodBarMaxValue,
+            1,
+        );
+        const barFillWidth = this.foodBarWidth * fillPercentage;
+        const barX =
+            this.scale.width / 2 - this.foodBarWidth / 2 + barFillWidth / 2;
+
+        // Update bar position and width by destroying and recreating
+        this.foodBar.destroy();
+        this.foodBar = this.add
+            .rectangle(barX, 25, barFillWidth, this.foodBarHeight, 0xffcc00, 1)
+            .setOrigin(0.5, 0.5)
+            .setDepth(1001);
+
+        // Update text
+        this.foodText.setText(`Food: ${this.totalFood.toFixed(1)}`);
+
+        // Change color based on amount
+        if (fillPercentage < 0.25) {
+            this.foodBar.setFillStyle(0xff6666, 1); // Red when low
+        } else if (fillPercentage < 0.75) {
+            this.foodBar.setFillStyle(0xffcc00, 1); // Gold when medium
+        } else {
+            this.foodBar.setFillStyle(0x66ff66, 1); // Green when high
+        }
+    }
+
+    private applyHungerEffects() {
+        const char = this.characters.get(1);
+        if (!char) return;
+
+        if (this.totalFood <= 0) {
+            char.setSpeedMultiplier(0.5);
+        } else {
+            char.setSpeedMultiplier(1);
+        }
+    }
+
+    private isInCommonTargetArea(x: number, y: number): boolean {
+        const midX = this.scale.width / 2;
+        const commonTargetMinY = this.scale.height - 240; // last 6 rows
+        const commonTargetMinX = midX - 240;
+        const commonTargetMaxX = midX + 240;
+
+        return (
+            y >= commonTargetMinY &&
+            x >= commonTargetMinX &&
+            x <= commonTargetMaxX
+        );
+    }
+
+    private tryBuildTower(pointer: Phaser.Input.Pointer) {
+        if (this.totalFood <= 0) {
             return;
         }
 
-        const towerSize = 80;
-        let overlapping = false;
+        const gridSize = 40;
+        const x = Math.round(pointer.worldX / gridSize) * gridSize;
+        const y = Math.round(pointer.worldY / gridSize) * gridSize;
+
+        if (!this.isInCommonTargetArea(x, y)) {
+            return;
+        }
+
+        // Prevent building on top of farms
+        let overlapsFarm = false;
+        this.farms.forEach((farm) => {
+            const distance = Phaser.Math.Distance.Between(farm.x, farm.y, x, y);
+            if (distance < 80) {
+                overlapsFarm = true;
+            }
+        });
+        if (overlapsFarm) return;
+
+        // Prevent building on top of towers
+        let overlapsTower = false;
         this.towers.forEach((tower) => {
             const distance = Phaser.Math.Distance.Between(
                 tower.x,
                 tower.y,
-                snappedX,
-                snappedY,
+                x,
+                y,
             );
-            if (distance < towerSize) {
-                overlapping = true;
+            if (distance < 80) {
+                overlapsTower = true;
             }
         });
+        if (overlapsTower) return;
 
-        if (overlapping) {
-            console.log(`❌ Cannot place tower - overlaps with existing tower`);
-            return;
-        }
-
-        const towerId = `tower-${Date.now()}`;
+        const towerId = `tower-dev-${Date.now()}`;
         const tower = new Tower({
             scene: this,
-            x: snappedX,
-            y: snappedY,
+            x,
+            y,
             towerId,
             playerNumber: 1,
-            networkManager: null, // No network in dev mode
         });
-
         this.towers.set(towerId, tower);
-        console.log(`🏗️ Tower built at (${snappedX}, ${snappedY})`);
     }
 }
 

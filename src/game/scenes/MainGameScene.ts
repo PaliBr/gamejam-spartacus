@@ -3,6 +3,10 @@ import Phaser from "phaser";
 import { Character } from "../objects/Character";
 import { Enemy } from "../objects/Enemy";
 import { Tower } from "../objects/Tower";
+import { TrapTower } from "../objects/TrapTower";
+import { Farm } from "../objects/Farm";
+import { FarmPopup } from "../objects/FarmPopup";
+import { TowerSelectionPopup } from "../objects/TowerSelectionPopup";
 import { NetworkManager } from "../managers/NetworkManager";
 
 interface MainGameSceneData {
@@ -18,6 +22,10 @@ export class MainGameScene extends Phaser.Scene {
     characters: Map<number, Character> = new Map();
     enemies: Map<string, Enemy> = new Map();
     towers: Map<string, Tower> = new Map();
+    trapTowers: Map<string, TrapTower> = new Map();
+    farms: Map<string, Farm> = new Map();
+    farmPopup: FarmPopup | null = null;
+    towerSelectionPopup: TowerSelectionPopup | null = null;
     networkManager: NetworkManager | null = null;
     playerId: string = "";
     roomPlayerId: string = "";
@@ -25,6 +33,39 @@ export class MainGameScene extends Phaser.Scene {
     roomId: string = "";
     // Target positions for visual reference (enemies aim for these)
     targetPositions: Array<{ x: number; y: number }> = [];
+    // Food inventory system (per player)
+    playerFood: Map<number, number> = new Map([
+        [1, 10],
+        [2, 10],
+    ]);
+    playerTotalFood: Map<number, number> = new Map([
+        [1, 10],
+        [2, 10],
+    ]);
+    private farmLastFood: Map<string, number> = new Map();
+    foodBarBgs: Map<number, Phaser.GameObjects.Rectangle> = new Map();
+    foodBars: Map<number, Phaser.GameObjects.Rectangle> = new Map();
+    foodTexts: Map<number, Phaser.GameObjects.Text> = new Map();
+    private foodBarWidth: number = 576; // 90% of player side (640 * 0.9)
+    private foodBarHeight: number = 40;
+    private foodBarMaxValue: number = 1000;
+    // Food consumption system (per player)
+    private consumptionTimers: Map<number, number> = new Map([
+        [1, 0],
+        [2, 0],
+    ]);
+    private gameTime: number = 0; // Track game time in milliseconds
+    // Gold inventory system (per player)
+    playerGold: Map<number, number> = new Map([
+        [1, 10],
+        [2, 10],
+    ]);
+    goldTexts: Map<number, Phaser.GameObjects.Text> = new Map();
+    // Gold production timer (same as consumption)
+    private goldProductionTimers: Map<number, number> = new Map([
+        [1, 0],
+        [2, 0],
+    ]);
 
     constructor() {
         super("MainGameScene");
@@ -213,28 +254,48 @@ export class MainGameScene extends Phaser.Scene {
         const targetRightXGrid = [32, 38, 32, 38]; // Grid positions from left (32 columns)
         const targetRightYGrid = [4, 4, 12, 12]; // Grid positions from top
 
-        // Initialize target positions on left side
+        // Create farms on left side
+        // Wheat (yellow), Carrot (red), Sunflower (blue), Potato (green)
+        const farmTypes: Array<"wheat" | "carrot" | "sunflower" | "potato"> = [
+            "wheat",
+            "carrot",
+            "sunflower",
+            "potato",
+        ];
+
         targetColors.forEach((color, index) => {
             const x = targetLeftXGrid[index] * 40;
             const y = targetLeftYGrid[index] * 40;
             this.targetPositions.push({ x, y });
 
-            this.add
-                .rectangle(x, y, targetSize, targetSize, color, 0.3)
-                .setStrokeStyle(3, color, 1)
-                .setDepth(0);
+            const farm = new Farm({
+                scene: this,
+                x,
+                y,
+                farmId: `farm-left-${index}`,
+                farmType: farmTypes[index],
+                playerNumber: 1,
+            });
+
+            this.farms.set(farm.farmId, farm);
         });
 
-        // Initialize target positions on right side
+        // Create farms on right side
         targetColors.forEach((color, index) => {
             const x = targetRightXGrid[index] * 40;
             const y = targetRightYGrid[index] * 40;
             this.targetPositions.push({ x, y });
 
-            this.add
-                .rectangle(x, y, targetSize, targetSize, color, 0.3)
-                .setStrokeStyle(3, color, 1)
-                .setDepth(0);
+            const farm = new Farm({
+                scene: this,
+                x,
+                y,
+                farmId: `farm-right-${index}`,
+                farmType: farmTypes[index],
+                playerNumber: 2,
+            });
+
+            this.farms.set(farm.farmId, farm);
         });
 
         // Create common target area at bottom center (12x6 grid cells = 480x240px)
@@ -303,9 +364,60 @@ export class MainGameScene extends Phaser.Scene {
             .setStrokeStyle(2, 0x666666, 0.8)
             .setDepth(0);
 
-        // Add input listener for tower placement anywhere
+        // Create food bar UI at top
+        this.createFoodBar();
+
+        // Add input listener for farm interaction
+        this.farmPopup = new FarmPopup(this);
+        this.towerSelectionPopup = new TowerSelectionPopup(this);
+
         this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-            this.tryBuildTower(pointer.x, pointer.y);
+            // Close tower selection popup if clicking outside
+            if (
+                this.towerSelectionPopup &&
+                this.towerSelectionPopup.isActive()
+            ) {
+                this.towerSelectionPopup.hide();
+                return;
+            }
+
+            // Close farm popup if clicking outside
+            if (this.farmPopup && this.farmPopup.isActive()) {
+                this.farmPopup.hide();
+                return;
+            }
+
+            // Check if clicking on a farm
+            let handled = false;
+            this.farms.forEach((farm) => {
+                const distance = Phaser.Math.Distance.Between(
+                    farm.x,
+                    farm.y,
+                    pointer.worldX,
+                    pointer.worldY,
+                );
+
+                // Check if player is within 1 tile (40px) of farm and click on farm area
+                const char = this.characters.get(this.playerNumber);
+                if (char) {
+                    const charDistance = Phaser.Math.Distance.Between(
+                        char.x,
+                        char.y,
+                        farm.x,
+                        farm.y,
+                    );
+
+                    if (charDistance <= 40 && distance < 160) {
+                        // Player within 1 tile and click on farm (160px = 4x4 grid)
+                        this.farmPopup!.show(farm);
+                        handled = true;
+                    }
+                }
+            });
+
+            if (!handled) {
+                this.showTowerSelectionMenu(pointer);
+            }
         });
 
         // Create characters at spawn points
@@ -381,6 +493,9 @@ export class MainGameScene extends Phaser.Scene {
             const customEvent = event as CustomEvent;
             const { towerId, x, y, playerNumber } = customEvent.detail;
             console.log(`🏗️ Remote tower built at (${x}, ${y})`);
+            if (this.towers.has(towerId)) {
+                return;
+            }
             const tower = new Tower({
                 scene: this,
                 x,
@@ -438,6 +553,9 @@ export class MainGameScene extends Phaser.Scene {
         // Create book toggle button next to mask button
         this.createBookToggleButton();
 
+        // Create gold display next to buttons
+        this.createGoldDisplay();
+
         // Clean up listener on shutdown
         this.events.on("shutdown", () => {
             window.removeEventListener("heroMoved", handleHeroMoved);
@@ -451,7 +569,10 @@ export class MainGameScene extends Phaser.Scene {
         EventBus.emit("current-scene-ready-3", this);
     }
 
-    update() {
+    update(time: number, dt: number) {
+        // Track game time for consumption scaling
+        this.gameTime += dt;
+
         // Update all characters' movement
         this.characters.forEach((character) => {
             character.update();
@@ -468,6 +589,104 @@ export class MainGameScene extends Phaser.Scene {
             // Flush queued killed enemies (250ms batch)
             tower.flushKilledEnemies();
         });
+
+        // Update all trap towers
+        this.trapTowers.forEach((trapTower) => {
+            trapTower.update(this.enemies, dt);
+        });
+
+        // Update all farms (production, enemy detection)
+        this.farms.forEach((farm) => {
+            farm.update(dt, this.enemies);
+        });
+
+        // Apply farm production deltas to player food
+        this.farms.forEach((farm) => {
+            const last = this.farmLastFood.get(farm.farmId) || 0;
+            const delta = farm.totalFood - last;
+            if (delta > 0) {
+                const currentFood = this.playerFood.get(farm.playerNumber) || 0;
+                const nextFood = Math.round((currentFood + delta) * 10) / 10;
+                this.playerFood.set(farm.playerNumber, nextFood);
+            }
+            this.farmLastFood.set(farm.farmId, farm.totalFood);
+        });
+
+        // Food consumption system (per player)
+        [1, 2].forEach((playerNum) => {
+            const consumptionTimer = this.consumptionTimers.get(playerNum) || 0;
+            const newTimer = consumptionTimer + dt;
+
+            if (newTimer >= 5000) {
+                // Calculate consumption based on game time (adds 2 each minute, max 16)
+                const minutesPassed = Math.floor(this.gameTime / 60000);
+                const scaledConsumption = Math.min(2 + 2 * minutesPassed, 16);
+
+                const currentFood = this.playerFood.get(playerNum) || 0;
+                const nextFood = Math.max(0, currentFood - scaledConsumption);
+                const roundedNextFood = Math.round(nextFood * 10) / 10;
+                this.playerFood.set(playerNum, roundedNextFood);
+                this.consumptionTimers.set(playerNum, newTimer - 5000);
+
+                // Show floating text for food consumption
+                this.showFloatingText(
+                    playerNum,
+                    `-${scaledConsumption}`,
+                    0xff0000,
+                    "food",
+                );
+
+                console.log(
+                    `🍽️ Player ${playerNum} consumed ${scaledConsumption} food (minute ${minutesPassed}). Remaining: ${roundedNextFood.toFixed(1)}`,
+                );
+            } else {
+                this.consumptionTimers.set(playerNum, newTimer);
+            }
+        });
+
+        // Gold production system (per player) - same timing and scaling as food consumption
+        [1, 2].forEach((playerNum) => {
+            const goldTimer = this.goldProductionTimers.get(playerNum) || 0;
+            const newTimer = goldTimer + dt;
+
+            if (newTimer >= 5000) {
+                // Calculate gold production based on game time (same as consumption: 2 + 2*minute, max 16)
+                const minutesPassed = Math.floor(this.gameTime / 60000);
+                const goldProduction = Math.min(2 + 2 * minutesPassed, 16);
+
+                const currentGold = this.playerGold.get(playerNum) || 0;
+                const nextGold =
+                    Math.round((currentGold + goldProduction) * 10) / 10;
+                this.playerGold.set(playerNum, nextGold);
+                this.goldProductionTimers.set(playerNum, newTimer - 5000);
+
+                // Update gold display
+                const goldText = this.goldTexts.get(playerNum);
+                if (goldText) {
+                    goldText.setText(`${Math.floor(nextGold)}`);
+                }
+
+                // Show floating text for gold production
+                this.showFloatingText(
+                    playerNum,
+                    `+${goldProduction}`,
+                    0xffd700,
+                    "gold",
+                );
+
+                console.log(
+                    `💰 Player ${playerNum} produced ${goldProduction} gold (minute ${minutesPassed}). Total: ${Math.floor(nextGold)}`,
+                );
+            } else {
+                this.goldProductionTimers.set(playerNum, newTimer);
+            }
+        });
+
+        // Update food bar display
+        this.updateFoodBar();
+
+        // Apply hunger effects for local player
+        this.applyHungerEffects();
 
         // Remove dead enemies from map
         const deadEnemies: string[] = [];
@@ -584,90 +803,26 @@ export class MainGameScene extends Phaser.Scene {
             tower.destroy();
         });
         this.towers.clear();
-    }
 
-    private tryBuildTower(clickX: number, clickY: number) {
-        // Snap to grid (40px grid cells, tower is 2x2 = 80px)
-        const gridSize = 40;
-        const snappedX = Math.round(clickX / gridSize) * gridSize;
-        const snappedY = Math.round(clickY / gridSize) * gridSize;
-
-        // Check if clicking on a target square (160px = targetSize, 4x4 grid cells)
-        const targetSize = 160;
-        for (const targetPos of this.targetPositions) {
-            if (
-                Math.abs(snappedX - targetPos.x) < targetSize / 2 &&
-                Math.abs(snappedY - targetPos.y) < targetSize / 2
-            ) {
-                console.log(`❌ Cannot build on target squares`);
-                return;
-            }
-        }
-
-        // Check if any character is within 2 tiles (80 pixels at 40px per tile)
-        let canBuild = false;
-        this.characters.forEach((character) => {
-            const distance = Phaser.Math.Distance.Between(
-                character.x,
-                character.y,
-                snappedX,
-                snappedY,
-            );
-            if (distance <= 80) {
-                // 2 tiles = 80 pixels
-                canBuild = true;
-            }
+        this.trapTowers.forEach((trapTower) => {
+            trapTower.destroy();
         });
+        this.trapTowers.clear();
 
-        if (!canBuild) {
-            console.log(`❌ Character must be within 2 tiles to build tower`);
-            return;
-        }
-
-        // Check if a tower already exists at this position (towers are 80px = 2 grid cells)
-        const towerSize = 80;
-        let overlapping = false;
-        this.towers.forEach((tower) => {
-            const distance = Phaser.Math.Distance.Between(
-                tower.x,
-                tower.y,
-                snappedX,
-                snappedY,
-            );
-            if (distance < towerSize) {
-                overlapping = true;
-            }
+        this.farms.forEach((farm) => {
+            farm.destroy();
         });
+        this.farms.clear();
 
-        if (overlapping) {
-            console.log(`❌ Cannot place tower - overlaps with existing tower`);
-            return;
+        if (this.farmPopup) {
+            this.farmPopup.destroy();
+            this.farmPopup = null;
         }
 
-        // Build the tower
-        const towerId = `tower-${Date.now()}`;
-        const tower = new Tower({
-            scene: this,
-            x: snappedX,
-            y: snappedY,
-            towerId,
-            playerNumber: this.playerNumber,
-            networkManager: this.networkManager,
-        });
-
-        this.towers.set(towerId, tower);
-
-        // Broadcast tower build to other player
-        if (this.networkManager) {
-            this.networkManager.sendAction("build_tower", {
-                towerId,
-                x: snappedX,
-                y: snappedY,
-                playerNumber: this.playerNumber,
-            });
+        if (this.towerSelectionPopup) {
+            this.towerSelectionPopup.destroy();
+            this.towerSelectionPopup = null;
         }
-
-        console.log(`🏗️ Tower built at (${snappedX}, ${snappedY})`);
     }
 
     createMaskToggleButton() {
@@ -825,6 +980,399 @@ export class MainGameScene extends Phaser.Scene {
         buttonBg.on("pointerout", () => {
             buttonBg.setFillStyle(0x444444, 0.8);
         });
+    }
+
+    createGoldDisplay() {
+        // Display gold amount next to book button (right side)
+        const goldX = 240; // Next to book button (160 + 80)
+        const goldY = this.scale.height - 60;
+
+        // Create gold coin icon
+        const coinIcon = this.add.graphics();
+        coinIcon.setDepth(100);
+
+        // Draw gold coin
+        coinIcon.fillStyle(0xffd700, 1); // Gold color
+        coinIcon.fillCircle(goldX - 30, goldY, 20);
+        coinIcon.fillStyle(0xffed4e, 1); // Lighter gold highlight
+        coinIcon.fillCircle(goldX - 35, goldY - 5, 8);
+
+        // Create gold text
+        const goldAmount = this.playerGold.get(this.playerNumber) || 0;
+        const goldText = this.add.text(goldX, goldY - 10, `${goldAmount}`, {
+            fontSize: "32px",
+            fontFamily: "Arial",
+            color: "#ffd700",
+            fontStyle: "bold",
+            stroke: "#000000",
+            strokeThickness: 4,
+        });
+        goldText.setOrigin(0, 0.5);
+        goldText.setDepth(101);
+
+        this.goldTexts.set(this.playerNumber, goldText);
+    }
+
+    private createFoodBar() {
+        // Create food bars for both players - Mortal Kombat style
+        [1, 2].forEach((playerNum) => {
+            // Player 1 on left, Player 2 on right (centered in their 640px side)
+            const x = playerNum === 1 ? 320 : this.scale.width - 320;
+            const y = 30;
+
+            // Outer black border (shadow/depth effect)
+            this.add
+                .rectangle(
+                    x,
+                    y + 2,
+                    this.foodBarWidth + 8,
+                    this.foodBarHeight + 8,
+                    0x000000,
+                    0.8,
+                )
+                .setDepth(998);
+
+            // Background bar (dark gray/black)
+            const foodBarBg = this.add
+                .rectangle(
+                    x,
+                    y,
+                    this.foodBarWidth,
+                    this.foodBarHeight,
+                    0x1a1a1a,
+                    1,
+                )
+                .setStrokeStyle(4, 0x000000, 1)
+                .setDepth(1000);
+            this.foodBarBgs.set(playerNum, foodBarBg);
+
+            // Inner border (bright accent)
+            this.add
+                .rectangle(
+                    x,
+                    y,
+                    this.foodBarWidth - 4,
+                    this.foodBarHeight - 4,
+                    0x000000,
+                    0,
+                )
+                .setStrokeStyle(2, 0xffdd00, 1)
+                .setDepth(999);
+
+            // Food fill bar - create with small initial width
+            const foodBar = this.add
+                .rectangle(
+                    x - this.foodBarWidth / 2 + 1,
+                    y,
+                    2,
+                    this.foodBarHeight - 8,
+                    0xffdd00,
+                    1,
+                )
+                .setOrigin(0.5, 0.5)
+                .setDepth(1001);
+            this.foodBars.set(playerNum, foodBar);
+
+            // Food text label
+            const foodText = this.add.text(x, y, `P${playerNum}: 10.0`, {
+                fontSize: "18px",
+                color: "#ffffff",
+                fontStyle: "bold",
+                fontFamily: "Arial",
+                stroke: "#000000",
+                strokeThickness: 3,
+            });
+            foodText.setOrigin(0.5, 0.5);
+            foodText.setDepth(1002);
+            this.foodTexts.set(playerNum, foodText);
+        });
+    }
+
+    private updateFoodBar() {
+        // Update food bars for both players
+        [1, 2].forEach((playerNum) => {
+            const totalFood = this.playerFood.get(playerNum) || 0;
+            this.playerTotalFood.set(playerNum, totalFood);
+
+            const foodBar = this.foodBars.get(playerNum);
+            const foodText = this.foodTexts.get(playerNum);
+
+            if (!foodBar || !foodText) return;
+
+            // Calculate bar fill width (proportional to foodBarWidth)
+            const fillPercentage = Math.min(
+                totalFood / this.foodBarMaxValue,
+                1,
+            );
+            const barFillWidth = this.foodBarWidth * fillPercentage;
+
+            // Player 1 on left, Player 2 on right
+            const baseX = playerNum === 1 ? 320 : this.scale.width - 320;
+            const barX = baseX - this.foodBarWidth / 2 + barFillWidth / 2;
+
+            // Update bar position and width by destroying and recreating
+            foodBar.destroy();
+
+            // MK-style bar fill with gradient effect
+            const newFoodBar = this.add
+                .rectangle(
+                    barX,
+                    30,
+                    barFillWidth,
+                    this.foodBarHeight - 8,
+                    0xffdd00,
+                    1,
+                )
+                .setOrigin(0.5, 0.5)
+                .setDepth(1001);
+            this.foodBars.set(playerNum, newFoodBar);
+
+            // Update text
+            foodText.setText(`P${playerNum}: ${totalFood.toFixed(1)}`);
+
+            // Mortal Kombat color scheme - yellow to orange to red
+            if (fillPercentage < 0.15) {
+                newFoodBar.setFillStyle(0xff0000, 1); // Bright red when critical
+            } else if (fillPercentage < 0.35) {
+                newFoodBar.setFillStyle(0xff3300, 1); // Red-orange when low
+            } else if (fillPercentage < 0.6) {
+                newFoodBar.setFillStyle(0xff9900, 1); // Orange when medium
+            } else {
+                newFoodBar.setFillStyle(0xffdd00, 1); // Yellow/gold when healthy
+            }
+        });
+    }
+
+    private applyHungerEffects() {
+        const totalFood = this.playerTotalFood.get(this.playerNumber) || 0;
+        const char = this.characters.get(this.playerNumber);
+
+        if (!char) return;
+
+        if (totalFood <= 0) {
+            char.setSpeedMultiplier(0.5);
+        } else {
+            char.setSpeedMultiplier(1);
+        }
+    }
+
+    private showFloatingText(
+        playerNum: number,
+        text: string,
+        color: number,
+        type: "food" | "gold",
+    ) {
+        // Position text in middle row of player's zone
+        // Middle row is around y = 360 (half of 720)
+        const midY = this.scale.height / 2;
+        const midX = this.scale.width / 2;
+
+        // Player 1 on left side, Player 2 on right side
+        const x = playerNum === 1 ? midX / 2 : midX + midX / 2;
+        const y = midY;
+
+        // Create floating text
+        const floatingText = this.add.text(x, y, text, {
+            fontSize: "48px",
+            fontFamily: "Arial",
+            color: `#${color.toString(16).padStart(6, "0")}`,
+            fontStyle: "bold",
+            stroke: "#000000",
+            strokeThickness: 4,
+        });
+        floatingText.setOrigin(0.5, 0.5);
+        floatingText.setDepth(1500);
+
+        // Animate upward fade out
+        this.tweens.add({
+            targets: floatingText,
+            y: y - 50,
+            alpha: 0,
+            duration: 1000,
+            ease: "Power2",
+            onComplete: () => {
+                floatingText.destroy();
+            },
+        });
+    }
+
+    private isInCommonTargetArea(x: number, y: number): boolean {
+        const midX = this.scale.width / 2;
+        const commonTargetMinY = this.scale.height - 240; // last 6 rows
+        const commonTargetMinX = midX - 240;
+        const commonTargetMaxX = midX + 240;
+
+        return (
+            y >= commonTargetMinY &&
+            x >= commonTargetMinX &&
+            x <= commonTargetMaxX
+        );
+    }
+
+    private isInPlayerHalf(
+        x: number,
+        y: number,
+        playerNumber: number,
+    ): boolean {
+        const midX = this.scale.width / 2;
+
+        // Player 1 is on left half, Player 2 is on right half
+        if (playerNumber === 1) {
+            return x < midX;
+        } else {
+            return x >= midX;
+        }
+    }
+
+    private showTowerSelectionMenu(pointer: Phaser.Input.Pointer) {
+        const gridSize = 40;
+        const x = Math.round(pointer.worldX / gridSize) * gridSize;
+        const y = Math.round(pointer.worldY / gridSize) * gridSize;
+
+        // Must be outside commonTarget area and in own half
+        if (this.isInCommonTargetArea(x, y)) {
+            return;
+        }
+
+        if (!this.isInPlayerHalf(x, y, this.playerNumber)) {
+            return;
+        }
+
+        // Check if location is valid for building
+        if (!this.isValidBuildLocation(x, y)) {
+            return;
+        }
+
+        // Show tower selection popup
+        if (this.towerSelectionPopup) {
+            this.towerSelectionPopup.show(x, y, (type, trapType) => {
+                if (type === "regular") {
+                    this.buildRegularTower(x, y);
+                } else if (type === "trap" && trapType !== undefined) {
+                    this.buildTrapTower(x, y, trapType);
+                }
+            });
+        }
+    }
+
+    private isValidBuildLocation(x: number, y: number): boolean {
+        // Prevent building on top of farms
+        let overlapsFarm = false;
+        this.farms.forEach((farm) => {
+            const distance = Phaser.Math.Distance.Between(farm.x, farm.y, x, y);
+            if (distance < 80) {
+                overlapsFarm = true;
+            }
+        });
+        if (overlapsFarm) return false;
+
+        // Prevent building on top of towers
+        let overlapsTower = false;
+        this.towers.forEach((tower) => {
+            const distance = Phaser.Math.Distance.Between(
+                tower.x,
+                tower.y,
+                x,
+                y,
+            );
+            if (distance < 80) {
+                overlapsTower = true;
+            }
+        });
+        if (overlapsTower) return false;
+
+        // Prevent building on top of trap towers
+        let overlapsTrapTower = false;
+        this.trapTowers.forEach((trapTower) => {
+            const distance = Phaser.Math.Distance.Between(
+                trapTower.x,
+                trapTower.y,
+                x,
+                y,
+            );
+            if (distance < 40) {
+                overlapsTrapTower = true;
+            }
+        });
+        if (overlapsTrapTower) return false;
+
+        return true;
+    }
+
+    private buildRegularTower(x: number, y: number) {
+        const totalFood = this.playerTotalFood.get(this.playerNumber) || 0;
+        if (totalFood <= 0) {
+            console.log("❌ Not enough food to build tower");
+            return;
+        }
+
+        const towerId = `tower-${this.playerNumber}-${Date.now()}`;
+        const tower = new Tower({
+            scene: this,
+            x,
+            y,
+            towerId,
+            playerNumber: this.playerNumber,
+            networkManager: this.networkManager,
+        });
+        this.towers.set(towerId, tower);
+
+        if (this.networkManager) {
+            this.networkManager.sendAction("build_tower", {
+                towerId,
+                x,
+                y,
+                playerNumber: this.playerNumber,
+            });
+        }
+    }
+
+    private buildTrapTower(x: number, y: number, trapType: number) {
+        const currentGold = this.playerGold.get(this.playerNumber) || 0;
+        const trapCost = 3;
+
+        if (currentGold < trapCost) {
+            console.log(
+                `❌ Not enough gold to build trap (need ${trapCost}, have ${currentGold})`,
+            );
+            return;
+        }
+
+        // Deduct gold
+        const newGold = currentGold - trapCost;
+        this.playerGold.set(this.playerNumber, newGold);
+
+        // Update gold display
+        const goldText = this.goldTexts.get(this.playerNumber);
+        if (goldText) {
+            goldText.setText(`${Math.floor(newGold)}`);
+        }
+
+        const trapId = `trap-${this.playerNumber}-${trapType}-${Date.now()}`;
+        const trapTower = new TrapTower({
+            scene: this,
+            x,
+            y,
+            trapId,
+            trapType,
+            playerNumber: this.playerNumber,
+            networkManager: this.networkManager,
+        });
+        this.trapTowers.set(trapId, trapTower);
+
+        if (this.networkManager) {
+            this.networkManager.sendAction("build_trap", {
+                trapId,
+                x,
+                y,
+                trapType,
+                playerNumber: this.playerNumber,
+            });
+        }
+
+        console.log(
+            `✅ Built trap tower type ${trapType} for ${trapCost} gold`,
+        );
     }
 }
 

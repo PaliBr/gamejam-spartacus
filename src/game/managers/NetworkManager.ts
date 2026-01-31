@@ -1,8 +1,10 @@
 import { supabase } from "../../services/supabase";
+import { RealtimeChannel } from "@supabase/supabase-js";
 
 export class NetworkManager {
     private roomId: string;
     private playerId: string;
+    private channel: RealtimeChannel | null = null;
     private sequenceNumber: number = 0;
     private actionQueue: any[] = [];
     private onHeroMoveCallback: ((data: any) => void) | null = null;
@@ -10,6 +12,13 @@ export class NetworkManager {
     constructor(roomId: string, playerId: string) {
         this.roomId = roomId;
         this.playerId = playerId;
+    }
+
+    setChannel(channel: RealtimeChannel) {
+        this.channel = channel;
+        console.log(
+            `📡 NetworkManager: Channel reference set for room ${this.roomId}`,
+        );
     }
 
     async sendAction(actionType: string, actionData: any) {
@@ -38,11 +47,15 @@ export class NetworkManager {
         const skipDatabase = ["hero_move"];
 
         console.log(`📡 Broadcasting action...`);
-        await supabase.channel(`game:${this.roomId}`).send({
-            type: "broadcast",
-            event: "action",
-            payload: action,
-        });
+        if (this.channel) {
+            await this.channel.send({
+                type: "broadcast",
+                event: "action",
+                payload: action,
+            });
+        } else {
+            console.error(`❌ No channel available for broadcasting!`);
+        }
 
         if (!skipDatabase.includes(actionType)) {
             console.log(`💾 Inserting action to database...`);

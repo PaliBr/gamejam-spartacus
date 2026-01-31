@@ -6,13 +6,17 @@ export class Enemy extends Phaser.GameObjects.Sprite {
         | "idle"
         | "moving_up"
         | "moving_to_side"
-        | "moving_to_target" = "idle";
+        | "moving_to_target"
+        | "attracted_to_trap" = "idle";
     private goingLeft: boolean = false;
     private enemyId: string;
     private startTime: number = 0;
     private createdAt: number = Date.now();
     public radius: number = 10; // Half of 20px for collision
     public enemyType: number = 0; // 0, 1, 2, or 3
+    public isAttractedToTrap: boolean = false;
+    public trapX: number = 0;
+    public trapY: number = 0;
 
     // Seeded random for synchronization across clients
     private seededRandom(seed: string): number {
@@ -81,6 +85,35 @@ export class Enemy extends Phaser.GameObjects.Sprite {
         const elapsedTime = Date.now() - this.createdAt;
         if (elapsedTime < this.startTime) {
             body.setVelocity(0, 0);
+            return;
+        }
+
+        // If attracted to trap, move toward trap
+        if (this.isAttractedToTrap) {
+            this.enemyState = "attracted_to_trap";
+            const distance = Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                this.trapX,
+                this.trapY,
+            );
+
+            if (distance < 5) {
+                // Reached trap, stop moving
+                body.setVelocity(0, 0);
+            } else {
+                // Move toward trap
+                const angle = Phaser.Math.Angle.Between(
+                    this.x,
+                    this.y,
+                    this.trapX,
+                    this.trapY,
+                );
+                body.setVelocity(
+                    Math.cos(angle) * this.speed,
+                    Math.sin(angle) * this.speed,
+                );
+            }
             return;
         }
 

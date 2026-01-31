@@ -15,6 +15,8 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
     private isMoving: boolean = false;
     private targetX: number;
     private targetY: number;
+    private baseSpeed: number = 250;
+    private speedMultiplier: number = 1;
     private speed: number = 250;
     public isLocalPlayer: boolean;
     private networkManager: NetworkManager | null;
@@ -39,6 +41,12 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
 
     getHasBook(): boolean {
         return this.hasBook;
+    }
+
+    setSpeedMultiplier(multiplier: number) {
+        const clamped = Math.max(0, multiplier);
+        this.speedMultiplier = clamped;
+        this.speed = this.baseSpeed * this.speedMultiplier;
     }
 
     constructor(config: CharacterConfig) {

@@ -12,6 +12,8 @@ interface GameCanvasProps {
     playerNumber: number;
 }
 
+const isDev = import.meta.env.VITE_ENV === "dev";
+
 export function GameCanvas({
     roomId,
     playerId,
@@ -36,9 +38,11 @@ export function GameCanvas({
         const initialize = async () => {
             initializeGame();
 
-            await setupRealtimeConnection();
-
-            setupEventListeners();
+            // Skip network setup in dev mode
+            if (!isDev) {
+                await setupRealtimeConnection();
+                setupEventListeners();
+            }
         };
 
         initialize();
@@ -197,6 +201,15 @@ export function GameCanvas({
                             detail: {
                                 playerNumber: payload.action_data.playerNumber,
                                 hasMask: payload.action_data.hasMask,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "toggle_book") {
+                    window.dispatchEvent(
+                        new CustomEvent("bookToggled", {
+                            detail: {
+                                playerNumber: payload.action_data.playerNumber,
+                                hasBook: payload.action_data.hasBook,
                             },
                         }),
                     );

@@ -21,13 +21,24 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
     public playerId: string;
     public playerNumber: number;
     public hasMask: boolean = false;
+    public hasBook: boolean = false;
+    private maskGraphic: Phaser.GameObjects.Graphics | null = null;
 
     setHasMask(value: boolean) {
         this.hasMask = value;
+        this.updateMaskVisual();
     }
 
     getHasMask(): boolean {
         return this.hasMask;
+    }
+
+    setHasBook(value: boolean) {
+        this.hasBook = value;
+    }
+
+    getHasBook(): boolean {
+        return this.hasBook;
     }
 
     constructor(config: CharacterConfig) {
@@ -62,6 +73,11 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         );
         console.log(`Character visible: ${this.visible}, alpha: ${this.alpha}`);
         console.log(`Character texture: ${this.texture.key}`);
+
+        // Create mask graphic (initially hidden)
+        this.maskGraphic = config.scene.add.graphics();
+        this.maskGraphic.setDepth(11); // Above character sprite
+        this.updateMaskVisual();
 
         // Setup mouse click handler for local player
         if (this.isLocalPlayer) {
@@ -100,6 +116,32 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
 
     moveTo(x: number, y: number) {
         const midX = this.scene.scale.width / 2;
+        const sceneHeight = this.scene.scale.height;
+        const sceneWidth = this.scene.scale.width;
+        const gridSize = 40;
+
+        // Menu area restrictions:
+        // Left menu: 19 columns from left, 7 rows from bottom = 0-760px width, last 7 rows (440-720px height)
+        // Right menu: 19 columns from right, 7 rows from bottom = 520-1280px width, last 7 rows (440-720px height)
+        // Bottom center menu: 19 columns centered, 2 rows = 240-1000px width, last 2 rows (640-720px height)
+
+        const leftMenuMaxX = 19 * gridSize; // 760px (columns 0-18)
+        const rightMenuMinX = sceneWidth - 19 * gridSize; // 520px (columns 13-31)
+        const sideMenuMinY = sceneHeight - 7 * gridSize; // 440px (last 7 rows)
+        const bottomMenuMinY = sceneHeight - 2 * gridSize; // 640px (last 2 rows)
+        const bottomMenuMinX = 6 * gridSize; // 240px (column 6)
+        const bottomMenuMaxX = 26 * gridSize; // 1040px (column 26)
+
+        // Check if target is in menu areas
+        const inLeftMenu = x < leftMenuMaxX && y >= sideMenuMinY;
+        const inRightMenu = x > rightMenuMinX && y >= sideMenuMinY;
+        const inBottomMenu =
+            y >= bottomMenuMinY && x >= bottomMenuMinX && x <= bottomMenuMaxX;
+
+        if (inLeftMenu || inRightMenu || inBottomMenu) {
+            console.log(`🚫 Cannot move into menu area!`);
+            return;
+        }
 
         // Check if trying to cross middle line without mask
         if (!this.hasMask) {
@@ -113,6 +155,24 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
             }
         }
 
+        // Check if trying to enter common target area without book
+        // Common target area: bottom 6 rows (Y >= 480), 12 tiles wide centered (X between 400-880)
+        const commonTargetMinY = sceneHeight - 240; // 480px (last 6 rows)
+        const commonTargetMinX = midX - 240; // 400px (6 tiles left from center)
+        const commonTargetMaxX = midX + 240; // 880px (6 tiles right from center)
+
+        if (!this.hasBook) {
+            const inCommonTarget =
+                y >= commonTargetMinY &&
+                x >= commonTargetMinX &&
+                x <= commonTargetMaxX;
+
+            if (inCommonTarget) {
+                console.log(`📕 Cannot enter common target area without book!`);
+                return;
+            }
+        }
+
         this.targetX = x;
         this.targetY = y;
         this.isMoving = true;
@@ -120,6 +180,48 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
 
     updateRemotePosition(x: number, y: number) {
         this.moveTo(x, y);
+    }
+
+    private updateMaskVisual() {
+        if (!this.maskGraphic) return;
+
+        this.maskGraphic.clear();
+
+        if (this.hasMask) {
+            // Draw mask on character's face - covers whole face
+            const maskX = this.x;
+            const maskY = this.y - 25; // Position on face
+
+            // Determine mask color based on player number
+            const maskColor = this.playerNumber === 1 ? 0x9932cc : 0xff8800; // Purple for P1, Orange for P2
+
+            // Full face mask (larger ellipse to cover whole face)
+            this.maskGraphic.fillStyle(maskColor, 0.9);
+            this.maskGraphic.fillEllipse(maskX, maskY, 18, 12);
+
+            // Eye holes (darker/black)
+            this.maskGraphic.fillStyle(0x000000, 1);
+            this.maskGraphic.fillCircle(maskX - 6, maskY - 2, 3);
+            this.maskGraphic.fillCircle(maskX + 6, maskY - 2, 3);
+
+            // Mask strings (match mask color but lighter)
+            this.maskGraphic.lineStyle(1, maskColor, 0.8);
+            if (this.flipX) {
+                this.maskGraphic.lineBetween(
+                    maskX - 18,
+                    maskY,
+                    maskX - 22,
+                    maskY,
+                );
+            } else {
+                this.maskGraphic.lineBetween(
+                    maskX + 18,
+                    maskY,
+                    maskX + 22,
+                    maskY,
+                );
+            }
+        }
     }
 
     update() {
@@ -178,9 +280,22 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         const vy = Math.sin(angle) * this.speed;
 
         this.setVelocity(vx, vy);
+
+        // Flip character based on horizontal movement direction
+        if (Math.abs(dx) > 5) {
+            // Only flip if moving significantly horizontally
+            this.setFlipX(dx < 0); // Flip when moving left
+        }
+
+        // Update mask position to follow character
+        this.updateMaskVisual();
     }
 
     destroy() {
+        if (this.maskGraphic) {
+            this.maskGraphic.destroy();
+            this.maskGraphic = null;
+        }
         super.destroy();
     }
 }

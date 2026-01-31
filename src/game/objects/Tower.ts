@@ -19,7 +19,7 @@ export class Tower extends Phaser.GameObjects.Sprite {
     private playerNumber: number;
     private killedEnemies: string[] = [];
     private lastFlushTime: number = 0;
-    private flushInterval: number = 500; // milliseconds
+    private flushInterval: number = 1000; // milliseconds
 
     constructor(config: TowerConfig) {
         super(config.scene, config.x, config.y, "");

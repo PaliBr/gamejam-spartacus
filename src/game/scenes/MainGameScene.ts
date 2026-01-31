@@ -237,6 +237,72 @@ export class MainGameScene extends Phaser.Scene {
                 .setDepth(0);
         });
 
+        // Create common target area at bottom center (12x6 grid cells = 480x240px)
+        // Centered: 6 tiles left and 6 tiles right from middle (tiles 10-22)
+        // Bottom: last 6 rows (rows 12-17 in 0-indexed, y from 480 to 720)
+        const commonTargetWidth = 12 * gridSize; // 480px
+        const commonTargetHeight = 6 * gridSize; // 240px
+        const commonTargetX = midX; // Center at middle
+        const commonTargetY = this.scale.height - commonTargetHeight / 2; // Bottom, centered vertically in the 6 rows
+
+        this.add
+            .rectangle(
+                commonTargetX,
+                commonTargetY,
+                commonTargetWidth,
+                commonTargetHeight,
+                0xff8800,
+                0.3,
+            )
+            .setStrokeStyle(3, 0xff8800, 1)
+            .setDepth(0);
+
+        // Draw menu areas (restricted movement zones)
+        const leftMenuWidth = 19 * gridSize; // 760px (19 columns)
+        const rightMenuWidth = 19 * gridSize; // 760px (19 columns)
+        const sideMenuHeight = 7 * gridSize; // 280px (7 rows from bottom)
+        const bottomMenuHeight = 2 * gridSize; // 80px (2 rows)
+        const bottomMenuWidth = 20 * gridSize; // 800px (20 columns from 6 to 26)
+
+        // Left menu area (bottom-left corner)
+        this.add
+            .rectangle(
+                leftMenuWidth / 2,
+                this.scale.height - sideMenuHeight / 2,
+                leftMenuWidth,
+                sideMenuHeight,
+                0x222222,
+                0.6,
+            )
+            .setStrokeStyle(2, 0x666666, 0.8)
+            .setDepth(0);
+
+        // Right menu area (bottom-right corner)
+        this.add
+            .rectangle(
+                this.scale.width - rightMenuWidth / 2,
+                this.scale.height - sideMenuHeight / 2,
+                rightMenuWidth,
+                sideMenuHeight,
+                0x222222,
+                0.6,
+            )
+            .setStrokeStyle(2, 0x666666, 0.8)
+            .setDepth(0);
+
+        // Bottom menu area (centered, 19 columns wide, 2 rows)
+        this.add
+            .rectangle(
+                midX,
+                this.scale.height - bottomMenuHeight / 2,
+                bottomMenuWidth,
+                bottomMenuHeight,
+                0x222222,
+                0.6,
+            )
+            .setStrokeStyle(2, 0x666666, 0.8)
+            .setDepth(0);
+
         // Add input listener for tower placement anywhere
         this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
             this.tryBuildTower(pointer.x, pointer.y);
@@ -343,6 +409,21 @@ export class MainGameScene extends Phaser.Scene {
 
         window.addEventListener("maskToggled", handleMaskToggled);
 
+        // Listen for book toggle events
+        const handleBookToggled = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { playerNumber, hasBook } = customEvent.detail;
+            console.log(
+                `📕 Book toggled for player ${playerNumber}: ${hasBook}`,
+            );
+            const char = this.characters.get(playerNumber);
+            if (char) {
+                char.setHasBook(hasBook);
+            }
+        };
+
+        window.addEventListener("bookToggled", handleBookToggled);
+
         // Player 1 spawns the initial 20 enemies
         if (this.playerNumber === 1) {
             // Spawn after a short delay to ensure everything is set up
@@ -354,6 +435,9 @@ export class MainGameScene extends Phaser.Scene {
         // Create mask toggle button in bottom left
         this.createMaskToggleButton();
 
+        // Create book toggle button next to mask button
+        this.createBookToggleButton();
+
         // Clean up listener on shutdown
         this.events.on("shutdown", () => {
             window.removeEventListener("heroMoved", handleHeroMoved);
@@ -361,6 +445,7 @@ export class MainGameScene extends Phaser.Scene {
             window.removeEventListener("enemyKilled", handleEnemyKilled);
             window.removeEventListener("towerBuilt", handleTowerBuilt);
             window.removeEventListener("maskToggled", handleMaskToggled);
+            window.removeEventListener("bookToggled", handleBookToggled);
         });
 
         EventBus.emit("current-scene-ready-3", this);
@@ -645,6 +730,90 @@ export class MainGameScene extends Phaser.Scene {
                 }
 
                 console.log(`🎭 Mask toggled: ${newMaskState}`);
+            }
+        });
+
+        // Hover effects
+        buttonBg.on("pointerover", () => {
+            buttonBg.setFillStyle(0x666666, 0.8);
+        });
+
+        buttonBg.on("pointerout", () => {
+            buttonBg.setFillStyle(0x444444, 0.8);
+        });
+    }
+
+    createBookToggleButton() {
+        const buttonX = 160; // Next to mask button (60 + 80 + 20 spacing)
+        const buttonY = this.scale.height - 60;
+        const buttonSize = 80;
+
+        // Create button background
+        const buttonBg = this.add.rectangle(
+            buttonX,
+            buttonY,
+            buttonSize,
+            buttonSize,
+            0x444444,
+            0.8,
+        );
+        buttonBg.setStrokeStyle(2, 0xffffff);
+        buttonBg.setInteractive({ cursor: "pointer" });
+        buttonBg.setDepth(100);
+
+        // Create book icon
+        const bookIcon = this.add.graphics();
+        bookIcon.setDepth(101);
+
+        // Draw a simple book shape
+        bookIcon.fillStyle(0x8b4513, 1); // Brown book cover
+        bookIcon.fillRect(buttonX - 20, buttonY - 25, 40, 50);
+
+        bookIcon.fillStyle(0xf4e4c1, 1); // Lighter pages
+        bookIcon.fillRect(buttonX - 18, buttonY - 23, 36, 46);
+
+        // Book spine
+        bookIcon.fillStyle(0x654321, 1);
+        bookIcon.fillRect(buttonX - 20, buttonY - 25, 8, 50);
+
+        // Page lines
+        bookIcon.lineStyle(1, 0x8b4513, 0.5);
+        for (let i = 0; i < 4; i++) {
+            const lineY = buttonY - 15 + i * 10;
+            bookIcon.lineBetween(buttonX - 10, lineY, buttonX + 15, lineY);
+        }
+
+        // Cross indicator when no book
+        const crossIcon = this.add.graphics();
+        crossIcon.setDepth(102);
+        crossIcon.lineStyle(3, 0xff0000, 1);
+        crossIcon.beginPath();
+        crossIcon.moveTo(buttonX - 25, buttonY - 25);
+        crossIcon.lineTo(buttonX + 25, buttonY + 25);
+        crossIcon.moveTo(buttonX + 25, buttonY - 25);
+        crossIcon.lineTo(buttonX - 25, buttonY + 25);
+        crossIcon.strokePath();
+        crossIcon.setVisible(true);
+
+        // Get local player character
+        const localChar = this.characters.get(this.playerNumber);
+
+        // Click handler
+        buttonBg.on("pointerdown", () => {
+            if (localChar) {
+                const newBookState = !localChar.getHasBook();
+                localChar.setHasBook(newBookState);
+                crossIcon.setVisible(!newBookState);
+
+                // Broadcast book state to network
+                if (this.networkManager) {
+                    this.networkManager.sendAction("toggle_book", {
+                        playerNumber: this.playerNumber,
+                        hasBook: newBookState,
+                    });
+                }
+
+                console.log(`📕 Book toggled: ${newBookState}`);
             }
         });
 

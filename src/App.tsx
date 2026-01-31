@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CreateRoom } from "./components/CreateRoom";
 import { JoinRoom } from "./components/JoinRoom";
 import { GameLobby } from "./components/GameLobby";
@@ -8,6 +8,8 @@ import "./style.css";
 
 type GameState = "menu" | "lobby" | "playing";
 
+const isDev = import.meta.env.VITE_ENV === "dev";
+
 export default function App() {
     const [gameState, setGameState] = useState<GameState>("menu");
     const [roomId, setRoomId] = useState<string | null>(null);
@@ -16,6 +18,16 @@ export default function App() {
     const [roomPlayerId, setRoomPlayerId] = useState<string | null>(null);
     const [playerNumber, setPlayerNumber] = useState<number>(0);
     const [isHost, setIsHost] = useState(false);
+
+    // In dev mode, bypass menu and go straight to playing
+    useEffect(() => {
+        if (isDev) {
+            setGameState("playing");
+            setRoomId("dev-room");
+            setRoomPlayerId("dev-player");
+            setPlayerNumber(1);
+        }
+    }, []);
 
     const handleRoomCreated = (
         id: string,
@@ -72,7 +84,8 @@ export default function App() {
             className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 
                     flex items-center justify-center p-4"
         >
-            {gameState === "menu" && (
+            {/* In dev mode, skip menu and lobby */}
+            {!isDev && gameState === "menu" && (
                 <div className="space-y-6">
                     <div className="text-center mb-8">
                         <h1 className="text-5xl font-bold text-white mb-2">
@@ -96,7 +109,7 @@ export default function App() {
                 </div>
             )}
 
-            {gameState === "lobby" && roomId && roomCode && (
+            {!isDev && gameState === "lobby" && roomId && roomCode && (
                 <GameLobby
                     roomId={roomId}
                     roomCode={roomCode}

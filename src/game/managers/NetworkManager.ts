@@ -49,6 +49,7 @@ export class NetworkManager {
             "spawn_enemies",
             "toggle_mask",
             "enemies_killed_batch",
+            "toggle_book",
         ];
 
         console.log(`📡 Broadcasting action...`);

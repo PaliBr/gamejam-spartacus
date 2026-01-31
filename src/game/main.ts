@@ -7,6 +7,10 @@ import { Preloader } from "./scenes/Preloader";
 import { RoomInit } from "./scenes/RoomInit";
 import { MainGameScene } from "./scenes/MainGameScene";
 import { TestConnection } from "./scenes/TestConnection";
+import { DevScene } from "./scenes/DevScene";
+
+// Check environment
+const isDev = import.meta.env.VITE_ENV === "dev";
 
 const config: Phaser.Types.Core.GameConfig = {
     scale: {
@@ -27,25 +31,30 @@ const config: Phaser.Types.Core.GameConfig = {
     },
     parent: "game-container",
     backgroundColor: "#028af8",
-    scene: [
-        Boot,
-        Preloader,
-        MainMenu,
-        MainGame,
-        GameOver,
-        RoomInit,
-        MainGameScene,
-        TestConnection,
-    ],
+    scene: isDev
+        ? [DevScene] // Dev mode: only DevScene
+        : [
+              Boot,
+              Preloader,
+              MainMenu,
+              MainGame,
+              GameOver,
+              RoomInit,
+              MainGameScene,
+              TestConnection,
+          ],
     physics: {
         default: "arcade",
         arcade: {
-            debug: false,
+            debug: isDev, // Enable physics debug in dev mode
         },
     },
 };
 
 const StartGame = (parent: string) => {
+    if (isDev) {
+        console.log("🔧 Starting in DEV mode - No network required");
+    }
     return new Game({ ...config, parent });
 };
 

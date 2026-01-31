@@ -44,7 +44,6 @@ export function GameLobby({
 
             // Poll every 2 seconds as a fallback to ensure sync
             pollInterval = setInterval(() => {
-                console.log("Polling for player updates...");
                 loadPlayers();
             }, 2000);
         };
@@ -61,15 +60,16 @@ export function GameLobby({
     const loadPlayers = async () => {
         try {
             const room = await roomService.getRoomDetails(roomId);
-            console.log("Room details loaded:", room);
-            console.log("Room status:", room.status);
-            console.log("Players from room_players:", room.room_players);
 
             // Check if game has started
             if (room.status === "playing") {
-                console.log("🎮 Room status is playing, starting game!");
                 onGameStart();
             }
+
+            const playerCount = room.room_players?.length || 0;
+            console.log(
+                `✓ Lobby Active | ${playerCount}/2 players | Status: ${room.status}`,
+            );
 
             setPlayers(room.room_players || []);
         } catch (err) {
@@ -79,7 +79,6 @@ export function GameLobby({
 
     const setupRoomService = () => {
         roomService.onPlayerJoined = (player: Player) => {
-            console.log("Player joined:", player);
             setPlayers((prev) => {
                 const exists = prev.find(
                     (p) => p.room_player_id === player.room_player_id,
@@ -90,19 +89,16 @@ export function GameLobby({
         };
 
         roomService.onPresenceUpdate = () => {
-            console.log("Presence update detected, reloading players");
             loadPlayers();
         };
 
         roomService.onRoomStatusChanged = (status: string) => {
-            console.log("Room status changed:", status);
             if (status === "playing") {
                 onGameStart();
             }
         };
 
         roomService.onPlayerDisconnected = (playerId: string) => {
-            console.log("Player disconnected:", playerId);
             setPlayers((prev) =>
                 prev.map((p) =>
                     p.player_id === playerId ? { ...p, is_ready: false } : p,
@@ -122,17 +118,10 @@ export function GameLobby({
                     filter: `room_id=eq.${roomId}`,
                 },
                 (payload) => {
-                    console.log(
-                        "Database change detected:",
-                        payload.eventType,
-                        payload,
-                    );
                     loadPlayers();
                 },
             )
-            .subscribe((status) => {
-                console.log("Players subscription status:", status);
-            });
+            .subscribe();
 
         // Subscribe to room status changes
         const roomSubscription = supabase
@@ -146,28 +135,13 @@ export function GameLobby({
                     filter: `room_id=eq.${roomId}`,
                 },
                 (payload) => {
-                    console.log("🎮 Room status changed:", payload);
-                    console.log("Payload new:", payload.new);
-                    console.log("Payload old:", payload.old);
                     const newStatus = (payload.new as any)?.status;
-                    console.log("New status value:", newStatus);
                     if (newStatus === "playing") {
-                        console.log(
-                            "🚀 Game is starting! Calling onGameStart()",
-                        );
                         onGameStart();
-                        console.log("✅ onGameStart() called");
-                    } else {
-                        console.log(
-                            "Status is not 'playing', it is:",
-                            newStatus,
-                        );
                     }
                 },
             )
-            .subscribe((status) => {
-                console.log("Room subscription status:", status);
-            });
+            .subscribe();
 
         return () => {
             playersSubscription.unsubscribe();
@@ -176,26 +150,15 @@ export function GameLobby({
     };
 
     const handleReady = async () => {
-        console.log("handleReady clicked", { players, currentPlayerId });
-        console.log(
-            "Player IDs in array:",
-            players?.map((p) => p.player_id),
-        );
-        console.log("Looking for player_id:", currentPlayerId);
-
         try {
             const currentPlayer = players?.find(
                 (p) => p.player_id === currentPlayerId,
             );
-            console.log("Current player:", currentPlayer);
             if (!currentPlayer) {
-                console.error("Current player not found");
-                console.error("Available players:", players);
                 return;
             }
 
             const newReadyState = !currentPlayer.is_ready;
-            console.log(`Setting ready state to: ${newReadyState}`);
 
             // Update database first
             await roomService.setPlayerReady(
@@ -204,24 +167,15 @@ export function GameLobby({
                 newReadyState,
             );
 
-            console.log("Database updated, reloading players...");
             // Reload from database to ensure we have the latest state
             await loadPlayers();
         } catch (err: any) {
-            console.error("Ready error:", err);
             setError(err.message);
         }
     };
 
     const handleStart = async () => {
-        console.log("handleStart called", {
-            isHost,
-            allPlayersReady,
-            canStart,
-        });
-
         if (!isHost) {
-            console.log("Not host, cannot start game");
             return;
         }
 
@@ -229,11 +183,8 @@ export function GameLobby({
         setError(null);
 
         try {
-            console.log("Calling startGame...");
             await roomService.startGame(roomId, currentPlayerId);
-            console.log("startGame succeeded, game should be starting...");
         } catch (err: any) {
-            console.error("startGame error:", err);
             setError(err.message);
         } finally {
             setLoading(false);

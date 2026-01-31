@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
 import { supabase } from "../services/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { MainGameScene } from "../game/scenes/MainGameScene";
+import { NetworkManager } from "../game/managers/NetworkManager";
 
 interface GameCanvasProps {
     roomId: string;
@@ -39,7 +41,13 @@ export function GameCanvas({
             width: 1920,
             height: 1080,
             backgroundColor: "#1a1a2e",
-            scene: [],
+            scene: [MainGameScene],
+            physics: {
+                default: "arcade",
+                arcade: {
+                    debug: false,
+                },
+            },
             scale: {
                 mode: Phaser.Scale.FIT,
                 autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -48,10 +56,15 @@ export function GameCanvas({
 
         gameRef.current = new Phaser.Game(config);
 
-        gameRef.current.scene.start("TestGameScene", {
+        // Create network manager
+        const networkManager = new NetworkManager(roomId, playerId);
+
+        // Start MainGameScene with proper data
+        gameRef.current.scene.start("MainGameScene", {
             roomId,
             playerId,
             playerNumber,
+            networkManager,
         });
     };
 
@@ -65,7 +78,6 @@ export function GameCanvas({
 
         // Listen for hero movements
         channel.on("broadcast", { event: "hero_move" }, ({ payload }) => {
-            console.log("Received hero move:", payload);
             setMessageCount((prev) => prev + 1);
 
             // Calculate latency
@@ -85,23 +97,32 @@ export function GameCanvas({
         // Track presence
         channel.on("presence", { event: "sync" }, () => {
             const state = channel.presenceState();
-            console.log("Presence sync:", state);
-            setConnected(Object.keys(state).length > 1);
+            const playerCount = Object.keys(state).length;
+            console.log(
+                `✓ Connection Active | ${playerCount}/2 players connected`,
+            );
+            setConnected(playerCount > 1);
         });
 
         channel.on("presence", { event: "join" }, ({ key }) => {
-            console.log("Player joined:", key);
+            const state = channel.presenceState();
+            const playerCount = Object.keys(state).length;
+            console.log(
+                `✓ Connection Active | ${playerCount}/2 players connected`,
+            );
         });
 
         channel.on("presence", { event: "leave" }, ({ key }) => {
-            console.log("Player left:", key);
+            const state = channel.presenceState();
+            const playerCount = Object.keys(state).length;
+            console.log(
+                `✓ Connection Active | ${playerCount}/2 players connected`,
+            );
             setConnected(false);
         });
 
         // Subscribe
         await channel.subscribe(async (status) => {
-            console.log("Subscription status:", status);
-
             if (status === "SUBSCRIBED") {
                 await channel.track({
                     user_id: playerId,
@@ -141,8 +162,6 @@ export function GameCanvas({
                     timestamp,
                 },
             });
-
-            console.log("Sent hero move:", { playerNumber, x, y });
         };
 
         window.addEventListener("sendHeroMove", handleSendHeroMove);

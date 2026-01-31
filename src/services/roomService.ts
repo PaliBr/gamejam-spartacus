@@ -142,10 +142,9 @@ export class RoomService {
                 this.handlePresenceSync(state);
             })
             .on("presence", { event: "join" }, ({ key, newPresences }) => {
-                console.log("Player joined presence:", key, newPresences);
+                // Player joined
             })
             .on("presence", { event: "leave" }, ({ key, leftPresences }) => {
-                console.log("Player left presence:", key, leftPresences);
                 this.handlePlayerDisconnect(key);
             });
 
@@ -201,10 +200,6 @@ export class RoomService {
         }
 
         this.reconnectAttempts++;
-        console.log(
-            `Reconnecting... Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`,
-        );
-
         const delay = Math.min(
             1000 * Math.pow(2, this.reconnectAttempts - 1),
             10000,
@@ -215,7 +210,6 @@ export class RoomService {
         try {
             await this.connectToRoom(roomId, playerId);
             this.reconnectAttempts = 0;
-            console.log("Reconnection successful");
         } catch (error) {
             console.error("Reconnection failed:", error);
             this.handleReconnection(roomId, playerId);
@@ -290,16 +284,12 @@ export class RoomService {
             });
         });
 
-        console.log("Online players:", players);
-
         if (this.onPresenceUpdate) {
             this.onPresenceUpdate(players);
         }
     }
 
     private handlePlayerDisconnect(playerId: string) {
-        console.log("Player disconnected:", playerId);
-
         if (this.onPlayerDisconnected) {
             this.onPlayerDisconnected(playerId);
         }
@@ -308,24 +298,18 @@ export class RoomService {
     }
 
     private handleGameAction(action: GameAction) {
-        console.log("Game action received:", action);
-
         if (this.onGameAction) {
             this.onGameAction(action);
         }
     }
 
     private handleStateSynchronization(state: any) {
-        console.log("State sync received:", state);
-
         if (this.onStateSync) {
             this.onStateSync(state);
         }
     }
 
     private handlePlayerChange(payload: any) {
-        console.log("Player change detected:", payload);
-
         if (payload.eventType === "INSERT") {
             if (this.onPlayerJoined) {
                 this.onPlayerJoined(payload.new);
@@ -358,22 +342,13 @@ export class RoomService {
 
     private handleRoomUpdate(payload: any) {
         const room = payload.new;
-        console.log("Room status changed:", room.status);
 
         if (this.onRoomStatusChanged) {
             this.onRoomStatusChanged(room.status);
         }
-
-        if (room.status === "playing") {
-            console.log("Game starting!");
-        }
     }
 
     async setPlayerReady(roomId: string, playerId: string, isReady: boolean) {
-        console.log(
-            `setPlayerReady called: roomId=${roomId}, playerId=${playerId}, isReady=${isReady}`,
-        );
-
         const { data, error } = await supabase
             .from("room_players")
             .update({ is_ready: isReady })

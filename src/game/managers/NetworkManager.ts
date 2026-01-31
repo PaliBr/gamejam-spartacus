@@ -5,6 +5,7 @@ export class NetworkManager {
     private playerId: string;
     private sequenceNumber: number = 0;
     private actionQueue: any[] = [];
+    private onHeroMoveCallback: ((data: any) => void) | null = null;
 
     constructor(roomId: string, playerId: string) {
         this.roomId = roomId;
@@ -36,14 +37,29 @@ export class NetworkManager {
         return action;
     }
 
+    onHeroMove(callback: (data: any) => void) {
+        this.onHeroMoveCallback = callback;
+    }
+
     processAction(action: any, gameScene: any) {
         switch (action.action_type) {
             case "hero_move":
-                gameScene.updateHeroPosition(
-                    action.player_id,
-                    action.action_data.x,
-                    action.action_data.y,
-                );
+                // Call the registered callback if it exists
+                if (this.onHeroMoveCallback) {
+                    this.onHeroMoveCallback({
+                        playerId: action.player_id,
+                        x: action.action_data.x,
+                        y: action.action_data.y,
+                    });
+                }
+                // Also call the game scene method if it exists
+                if (gameScene.updateHeroPosition) {
+                    gameScene.updateHeroPosition(
+                        action.player_id,
+                        action.action_data.x,
+                        action.action_data.y,
+                    );
+                }
                 break;
             case "send_enemy":
                 gameScene.spawnEnemy(

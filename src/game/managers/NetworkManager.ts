@@ -44,7 +44,12 @@ export class NetworkManager {
 
         // For real-time actions like movement, use broadcast only (fast)
         // For important state changes, also save to database
-        const skipDatabase = ["hero_move", "spawn_enemies", "toggle_mask"];
+        const skipDatabase = [
+            "hero_move",
+            "spawn_enemies",
+            "toggle_mask",
+            "enemies_killed_batch",
+        ];
 
         console.log(`📡 Broadcasting action...`);
         if (this.channel) {

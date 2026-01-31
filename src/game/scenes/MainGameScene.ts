@@ -380,6 +380,8 @@ export class MainGameScene extends Phaser.Scene {
         // Update all towers
         this.towers.forEach((tower) => {
             tower.update(this.enemies);
+            // Flush queued killed enemies (250ms batch)
+            tower.flushKilledEnemies();
         });
 
         // Remove dead enemies from map

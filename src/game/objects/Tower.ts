@@ -17,6 +17,9 @@ export class Tower extends Phaser.GameObjects.Sprite {
     private lastShotTime: number = 0;
     private networkManager: any;
     private playerNumber: number;
+    private killedEnemies: string[] = [];
+    private lastFlushTime: number = 0;
+    private flushInterval: number = 250; // milliseconds
 
     constructor(config: TowerConfig) {
         super(config.scene, config.x, config.y, "");
@@ -94,16 +97,31 @@ export class Tower extends Phaser.GameObjects.Sprite {
             onComplete: () => graphics.destroy(),
         });
 
-        // Broadcast enemy death to other player
-        if (this.networkManager) {
-            this.networkManager.sendAction("enemy_killed", {
-                enemyId: (enemy as any).enemyId,
-            });
-        }
+        // Queue enemy for bulk sending
+        this.killedEnemies.push((enemy as any).enemyId);
 
         // Remove enemy
         enemy.destroy();
         console.log(`💥 Enemy eliminated by tower ${this.towerId}`);
+    }
+
+    flushKilledEnemies() {
+        const now = Date.now();
+        // Flush if interval passed or if many enemies queued
+        if (
+            this.killedEnemies.length > 0 &&
+            (now - this.lastFlushTime >= this.flushInterval ||
+                this.killedEnemies.length > 10)
+        ) {
+            if (this.networkManager) {
+                this.networkManager.sendAction("enemies_killed_batch", {
+                    enemyIds: this.killedEnemies,
+                    towerId: this.towerId,
+                });
+            }
+            this.killedEnemies = [];
+            this.lastFlushTime = now;
+        }
     }
 
     getRange(): number {

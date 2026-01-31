@@ -180,6 +180,17 @@ export function GameCanvas({
                             },
                         }),
                     );
+                } else if (payload.action_type === "enemies_killed_batch") {
+                    // Handle bulk killed enemies
+                    payload.action_data.enemyIds.forEach((enemyId: string) => {
+                        window.dispatchEvent(
+                            new CustomEvent("enemyKilled", {
+                                detail: {
+                                    enemyId: enemyId,
+                                },
+                            }),
+                        );
+                    });
                 } else if (payload.action_type === "toggle_mask") {
                     window.dispatchEvent(
                         new CustomEvent("maskToggled", {

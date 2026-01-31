@@ -3,7 +3,12 @@ import { RoomService } from "../services/roomService";
 import { v4 as uuidv4 } from "uuid";
 
 interface CreateRoomProps {
-    onRoomCreated: (roomId: string, roomCode: string, playerId: string) => void;
+    onRoomCreated: (
+        roomId: string,
+        roomCode: string,
+        playerId: string,
+        roomPlayerId: string,
+    ) => void;
     onError?: (error: string) => void;
 }
 
@@ -25,21 +30,27 @@ export function CreateRoom({ onRoomCreated, onError }: CreateRoomProps) {
             const playerId = uuidv4();
 
             const roomService = new RoomService();
-            const { room, roomCode } = await roomService.createRoom(
+            const { room, roomCode, player } = await roomService.createRoom(
                 playerId,
                 username,
             );
 
-            console.log("Room created:", { room, roomCode });
+            console.log("Room created:", { room, roomCode, player });
             console.log("Room ID:", room.room_id);
             console.log(
                 "Calling onRoomCreated with:",
                 room.room_id,
                 roomCode,
                 playerId,
+                player.room_player_id,
             );
 
-            onRoomCreated(room.room_id, roomCode, playerId);
+            onRoomCreated(
+                room.room_id,
+                roomCode,
+                playerId,
+                player.room_player_id,
+            );
         } catch (err: any) {
             const errorMessage = err.message || "Failed to create room";
             setError(errorMessage);

@@ -7,6 +7,7 @@ interface JoinRoomProps {
         roomId: string,
         roomCode: string,
         playerId: string,
+        roomPlayerId: string,
         playerNumber: number,
     ) => void;
     onError?: (error: string) => void;
@@ -41,21 +42,32 @@ export function JoinRoom({ onRoomJoined, onError }: JoinRoomProps) {
             const playerId = uuidv4();
 
             const roomService = new RoomService();
-            const { room } = await roomService.joinRoom(
+            const { room, player } = await roomService.joinRoom(
                 roomCode.toUpperCase(),
                 playerId,
                 username,
             );
 
-            console.log("Successfully joined room:", { room, roomCode });
+            console.log("Successfully joined room:", {
+                room,
+                roomCode,
+                player,
+            });
             console.log(
                 "Calling onRoomJoined with:",
                 room.room_id,
                 roomCode.toUpperCase(),
                 playerId,
+                player.room_player_id,
                 2,
             );
-            onRoomJoined(room.room_id, roomCode.toUpperCase(), playerId, 2);
+            onRoomJoined(
+                room.room_id,
+                roomCode.toUpperCase(),
+                playerId,
+                player.room_player_id,
+                2,
+            );
         } catch (err: any) {
             const errorMessage = err.message || "Failed to join room";
             setError(errorMessage);

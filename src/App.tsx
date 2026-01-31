@@ -13,14 +13,26 @@ export default function App() {
     const [roomId, setRoomId] = useState<string | null>(null);
     const [roomCode, setRoomCode] = useState<string | null>(null);
     const [playerId, setPlayerId] = useState<string>(uuidv4());
+    const [roomPlayerId, setRoomPlayerId] = useState<string | null>(null);
     const [playerNumber, setPlayerNumber] = useState<number>(0);
     const [isHost, setIsHost] = useState(false);
 
-    const handleRoomCreated = (id: string, code: string, pId: string) => {
-        console.log("handleRoomCreated called with:", { id, code, pId });
+    const handleRoomCreated = (
+        id: string,
+        code: string,
+        pId: string,
+        rPlayerId: string,
+    ) => {
+        console.log("handleRoomCreated called with:", {
+            id,
+            code,
+            pId,
+            rPlayerId,
+        });
         setRoomId(id);
         setRoomCode(code);
         setPlayerId(pId);
+        setRoomPlayerId(rPlayerId);
         setPlayerNumber(1);
         setIsHost(true);
         setGameState("lobby");
@@ -31,12 +43,20 @@ export default function App() {
         id: string,
         code: string,
         pId: string,
+        rPlayerId: string,
         pNum: number,
     ) => {
-        console.log("handleRoomJoined called with:", { id, code, pId, pNum });
+        console.log("handleRoomJoined called with:", {
+            id,
+            code,
+            pId,
+            rPlayerId,
+            pNum,
+        });
         setRoomId(id);
         setRoomCode(code);
         setPlayerId(pId);
+        setRoomPlayerId(rPlayerId);
         setPlayerNumber(pNum);
         setIsHost(false);
         setGameState("lobby");
@@ -86,10 +106,11 @@ export default function App() {
                 />
             )}
 
-            {gameState === "playing" && roomId && playerId && (
+            {gameState === "playing" && roomId && playerId && roomPlayerId && (
                 <GameCanvas
                     roomId={roomId}
                     playerId={playerId}
+                    roomPlayerId={roomPlayerId}
                     playerNumber={playerNumber}
                 />
             )}

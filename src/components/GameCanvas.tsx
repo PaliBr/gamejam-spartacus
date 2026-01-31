@@ -8,26 +8,34 @@ import { NetworkManager } from "../game/managers/NetworkManager";
 interface GameCanvasProps {
     roomId: string;
     playerId: string;
+    roomPlayerId: string;
     playerNumber: number;
 }
 
 export function GameCanvas({
     roomId,
     playerId,
+    roomPlayerId,
     playerNumber,
 }: GameCanvasProps) {
     const gameRef = useRef<Phaser.Game | null>(null);
     const channelRef = useRef<RealtimeChannel | null>(null);
+    const actionsChannelRef = useRef<RealtimeChannel | null>(null);
     const [connected, setConnected] = useState(false);
     const [latency, setLatency] = useState(0);
     const [messageCount, setMessageCount] = useState(0);
 
     useEffect(() => {
-        initializeGame();
+        const initialize = async () => {
+            initializeGame();
 
-        setupRealtimeConnection();
+            await setupRealtimeConnection();
+            await setupActionsListener();
 
-        setupEventListeners();
+            setupEventListeners();
+        };
+
+        initialize();
 
         return () => {
             cleanup();
@@ -57,12 +65,13 @@ export function GameCanvas({
         gameRef.current = new Phaser.Game(config);
 
         // Create network manager
-        const networkManager = new NetworkManager(roomId, playerId);
+        const networkManager = new NetworkManager(roomId, roomPlayerId);
 
         // Start MainGameScene with proper data
         gameRef.current.scene.start("MainGameScene", {
             roomId,
             playerId,
+            roomPlayerId,
             playerNumber,
             networkManager,
         });
@@ -76,60 +85,50 @@ export function GameCanvas({
             },
         });
 
-        // Listen for hero movements
-        channel.on("broadcast", { event: "hero_move" }, ({ payload }) => {
-            setMessageCount((prev) => prev + 1);
-
-            // Calculate latency
-            if (payload.timestamp) {
-                const latency = Date.now() - payload.timestamp;
-                setLatency(latency);
-            }
-
-            // Send to Phaser
-            window.dispatchEvent(
-                new CustomEvent("heroMoved", {
-                    detail: payload,
-                }),
-            );
-        });
-
         // Track presence
         channel.on("presence", { event: "sync" }, () => {
             const state = channel.presenceState();
             const playerCount = Object.keys(state).length;
             console.log(
-                `✓ Connection Active | ${playerCount}/2 players connected`,
+                `🔄 Presence Sync | ${playerCount}/2 players | State:`,
+                state,
             );
-            setConnected(playerCount > 1);
+            setConnected(playerCount >= 2);
         });
 
-        channel.on("presence", { event: "join" }, ({ key }) => {
+        channel.on("presence", { event: "join" }, ({ key, newPresences }) => {
             const state = channel.presenceState();
             const playerCount = Object.keys(state).length;
             console.log(
-                `✓ Connection Active | ${playerCount}/2 players connected`,
+                `✅ Player Joined: ${key} | ${playerCount}/2 players | Presences:`,
+                newPresences,
             );
+            setConnected(playerCount >= 2);
         });
 
-        channel.on("presence", { event: "leave" }, ({ key }) => {
+        channel.on("presence", { event: "leave" }, ({ key, leftPresences }) => {
             const state = channel.presenceState();
             const playerCount = Object.keys(state).length;
             console.log(
-                `✓ Connection Active | ${playerCount}/2 players connected`,
+                `❌ Player Left: ${key} | ${playerCount}/2 players | Presences:`,
+                leftPresences,
             );
-            setConnected(false);
+            setConnected(playerCount >= 2);
         });
 
         // Subscribe
         await channel.subscribe(async (status) => {
+            console.log(`📡 Channel subscription status: ${status}`);
             if (status === "SUBSCRIBED") {
-                await channel.track({
+                console.log(
+                    `📍 Tracking presence for player ${playerNumber} (${playerId})`,
+                );
+                const trackResult = await channel.track({
                     user_id: playerId,
                     player_number: playerNumber,
                     online_at: new Date().toISOString(),
                 });
-                setConnected(true);
+                console.log("📍 Track result:", trackResult);
 
                 // Notify Phaser
                 window.dispatchEvent(
@@ -141,6 +140,129 @@ export function GameCanvas({
         });
 
         channelRef.current = channel;
+    };
+
+    const setupActionsListener = async () => {
+        console.log(`🎧 Setting up actions listener for room: ${roomId}`);
+        console.log(`   Current player roomPlayerId: ${roomPlayerId}`);
+        console.log(`   Current player number: ${playerNumber}`);
+
+        // First, check if there are any existing actions
+        const { data: existingActions, error: queryError } = await supabase
+            .from("actions")
+            .select("*")
+            .eq("room_id", roomId)
+            .order("timestamp", { ascending: false })
+            .limit(5);
+
+        if (queryError) {
+            console.error("❌ Error querying actions:", queryError);
+        } else {
+            console.log("📋 Existing actions in DB:", existingActions);
+        }
+
+        const actionsChannel = supabase
+            .channel(`db-actions:${roomId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "actions",
+                    filter: `room_id=eq.${roomId}`,
+                },
+                (payload) => {
+                    const action = payload.new;
+                    console.log("🔔 New action received:", action);
+                    console.log("  - Action player_id:", action.player_id);
+                    console.log(
+                        "  - Action player_id type:",
+                        typeof action.player_id,
+                    );
+                    console.log("  - Current roomPlayerId:", roomPlayerId);
+                    console.log(
+                        "  - Current roomPlayerId type:",
+                        typeof roomPlayerId,
+                    );
+                    console.log(
+                        "  - Exact match (===)?",
+                        action.player_id === roomPlayerId,
+                    );
+                    console.log(
+                        "  - Loose match (==)?",
+                        action.player_id == roomPlayerId,
+                    );
+
+                    // Only process if it's not from this player
+                    if (action.player_id !== roomPlayerId) {
+                        console.log("✅ Processing action from other player");
+                        setMessageCount((prev) => prev + 1);
+
+                        if (action.action_type === "hero_move") {
+                            console.log(
+                                "🎮 Hero move action detected:",
+                                action.action_data,
+                            );
+
+                            // Calculate latency
+                            if (action.timestamp) {
+                                const latency =
+                                    Date.now() -
+                                    new Date(action.timestamp).getTime();
+                                setLatency(latency);
+                            }
+
+                            // Send to Phaser
+                            console.log(
+                                "📢 Dispatching heroMoved event with:",
+                                {
+                                    playerId: action.player_id,
+                                    playerNumber:
+                                        action.action_data.playerNumber,
+                                    x: action.action_data.x,
+                                    y: action.action_data.y,
+                                },
+                            );
+
+                            window.dispatchEvent(
+                                new CustomEvent("heroMoved", {
+                                    detail: {
+                                        playerId: action.player_id,
+                                        playerNumber:
+                                            action.action_data.playerNumber,
+                                        x: action.action_data.x,
+                                        y: action.action_data.y,
+                                    },
+                                }),
+                            );
+                        }
+                    } else {
+                        console.log("⏭️ Skipping action from this player");
+                    }
+                },
+            )
+            .subscribe((status, err) => {
+                console.log(
+                    `📡 Actions channel subscription status: ${status}`,
+                );
+                if (err) {
+                    console.error(`❌ Subscription error:`, err);
+                }
+                if (status === "SUBSCRIBED") {
+                    console.log(
+                        `✅ Actions listener active for room ${roomId}`,
+                    );
+                } else if (status === "CHANNEL_ERROR") {
+                    console.error(`❌ Actions channel error!`);
+                } else if (status === "TIMED_OUT") {
+                    console.error(`⏰ Actions channel timed out!`);
+                } else if (status === "CLOSED") {
+                    console.warn(`🚪 Actions channel closed`);
+                }
+            });
+
+        actionsChannelRef.current = actionsChannel;
+        console.log(`📌 Actions channel reference stored`);
     };
 
     const setupEventListeners = () => {
@@ -173,6 +295,9 @@ export function GameCanvas({
     };
 
     const cleanup = async () => {
+        if (actionsChannelRef.current) {
+            await supabase.removeChannel(actionsChannelRef.current);
+        }
         if (channelRef.current) {
             await supabase.removeChannel(channelRef.current);
         }
@@ -210,7 +335,6 @@ export function GameCanvas({
                     </div>
                 </div>
 
-                {/* Stats */}
                 <div className="bg-slate-800/90 backdrop-blur-sm rounded-lg p-4 space-y-2">
                     <div className="text-slate-300 text-sm">
                         <span className="font-semibold">Room:</span>{" "}
@@ -231,23 +355,6 @@ export function GameCanvas({
                 </div>
             </div>
 
-            {/* Instructions */}
-            <div className="absolute bottom-4 left-4 bg-slate-800/90 backdrop-blur-sm rounded-lg p-4 max-w-md pointer-events-none">
-                <h3 className="text-white font-bold mb-2">
-                    Testing Connection:
-                </h3>
-                <ul className="text-slate-300 text-sm space-y-1">
-                    <li>• Use WASD or Arrow Keys to move your hero</li>
-                    <li>• Click anywhere on your side to move there</li>
-                    <li>• Your hero is on Player {playerNumber}'s side</li>
-                    <li>
-                        • Watch the other hero move when your opponent moves
-                    </li>
-                    <li>• Check latency in the top-right corner</li>
-                </ul>
-            </div>
-
-            {/* Back Button */}
             <button
                 onClick={() => window.location.reload()}
                 className="absolute top-4 left-4 bg-slate-800 hover:bg-slate-700 

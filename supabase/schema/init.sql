@@ -12,8 +12,8 @@ create table rooms (
 -- ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
 
 create table room_players (
-    room_player_id uuid primary key default gen_random_uuid();
-    room_id uuid references rooms(room_id) not null on delete cascade,
+    room_player_id uuid primary key default gen_random_uuid(),
+    room_id uuid not null references rooms(room_id) on delete cascade,
     player_id uuid not null,
     player_number int not null,
     username text not null,
@@ -28,7 +28,7 @@ create table room_players (
 -- ALTER TABLE room_players ENABLE ROW LEVEL SECURITY;
 
 create table states (
-  state_id uuid primary key default uuid_generate_v4(),
+  state_id uuid primary key default gen_random_uuid(),
   room_id uuid references rooms(room_id) on delete cascade,
   game_tick integer default 0,
   timestamp timestamp with time zone default now(),
@@ -38,7 +38,7 @@ create table states (
 -- ALTER TABLE states ENABLE ROW LEVEL SECURITY;
 
 create table actions (
-  action_id uuid primary key default uuid_generate_v4(),
+  action_id uuid primary key default gen_random_uuid(),
   room_id uuid references rooms(room_id) on delete cascade,
   player_id uuid references room_players(room_player_id) on delete cascade,
   action_type text not null, -- hero_move, send_enemy, build_tower, upgrade_tower
@@ -51,6 +51,11 @@ create table actions (
 
 CREATE INDEX idx_rooms_code ON rooms(code);
 CREATE INDEX idx_rooms_status ON rooms(status);
-CREATE INDEX idx_players_room ON romm_players(room_id);
+CREATE INDEX idx_players_room ON room_players(room_id);
 CREATE INDEX idx_actions_room_seq ON actions(room_id, sequence_number);
 CREATE INDEX idx_states_room ON states(room_id);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE actions;
+ALTER PUBLICATION supabase_realtime ADD TABLE rooms;
+ALTER PUBLICATION supabase_realtime ADD TABLE room_players;
+ALTER PUBLICATION supabase_realtime ADD TABLE states;

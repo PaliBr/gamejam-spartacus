@@ -426,25 +426,35 @@ export class RoomService {
     }
 
     async leaveRoom(roomId: string, playerId: string) {
-        await supabase
-            .from("room_players")
-            .delete()
-            .eq("room_id", roomId)
-            .eq("player_id", playerId);
-
+        // Get the current room status
         const { data: room } = await supabase
             .from("rooms")
-            .select("current_players")
+            .select("status")
             .eq("room_id", roomId)
             .single();
 
-        if (room) {
+        // Only delete player records if the game hasn't started yet
+        if (room && room.status === "waiting") {
             await supabase
+                .from("room_players")
+                .delete()
+                .eq("room_id", roomId)
+                .eq("player_id", playerId);
+
+            const { data: currentRoom } = await supabase
                 .from("rooms")
-                .update({
-                    current_players: 1,
-                })
-                .eq("room_id", roomId);
+                .select("current_players")
+                .eq("room_id", roomId)
+                .single();
+
+            if (currentRoom) {
+                await supabase
+                    .from("rooms")
+                    .update({
+                        current_players: currentRoom.current_players - 1,
+                    })
+                    .eq("room_id", roomId);
+            }
         }
 
         await this.cleanup();

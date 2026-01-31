@@ -5,6 +5,7 @@ import { NetworkManager } from "../managers/NetworkManager";
 
 interface MainGameSceneData {
     playerId: string;
+    roomPlayerId: string;
     playerNumber: number;
     roomId: string;
     networkManager: NetworkManager;
@@ -15,6 +16,7 @@ export class MainGameScene extends Phaser.Scene {
     characters: Map<number, Character> = new Map();
     networkManager: NetworkManager | null = null;
     playerId: string = "";
+    roomPlayerId: string = "";
     playerNumber: number = 0;
     roomId: string = "";
 
@@ -24,23 +26,55 @@ export class MainGameScene extends Phaser.Scene {
 
     init(data: MainGameSceneData) {
         this.playerId = data.playerId;
+        this.roomPlayerId = data.roomPlayerId;
         this.playerNumber = data.playerNumber;
         this.roomId = data.roomId;
         this.networkManager = data.networkManager;
+
+        console.log("MainGameScene init:", {
+            playerId: this.playerId,
+            roomPlayerId: this.roomPlayerId,
+            playerNumber: this.playerNumber,
+            roomId: this.roomId,
+        });
     }
 
     create() {
-        // Create simple grass background
-        const grassColor = 0x4a9d3e; // Nice grass green
-        this.cameras.main.setBackgroundColor(grassColor);
+        this.cameras.main.setBackgroundColor(0x3a9d23);
 
-        // Add a grass texture pattern
-        const graphics = this.add.graphics();
-        graphics.fillStyle(0x3d8b35, 0.3); // Darker green for variation
+        // Create tilemap
+        const map = this.make.tilemap({ key: "map" });
 
-        // Create grass stripe pattern
-        for (let y = 0; y < this.scale.height; y += 20) {
-            graphics.fillRect(0, y, this.scale.width, 10);
+        // Debug: log what tilesets are actually in the map
+        console.log(
+            "Available tilesets:",
+            map.tilesets.map((t) => t.name),
+        );
+
+        // Get the actual tileset names from the loaded map
+        const tilesetNames = map.tilesets.map((t) => t.name);
+
+        // Add the tilesets using the actual names found
+        const tileset1 = map.addTilesetImage(tilesetNames[0], "mvp2-farm");
+        const tileset2 = map.addTilesetImage(
+            tilesetNames[1] || tilesetNames[0],
+            "mvp2-grass",
+        );
+
+        if (tileset1 && tileset2) {
+            const layer = map.createLayer(
+                "Tile Layer 1",
+                [tileset1, tileset2],
+                0,
+                0,
+            );
+            if (layer) {
+                console.log("Layer created successfully");
+            }
+        } else {
+            console.error("Failed to create tileset");
+            console.log("tileset1:", tileset1);
+            console.log("tileset2:", tileset2);
         }
 
         const midX = this.scale.width * 0.5;
@@ -79,22 +113,30 @@ export class MainGameScene extends Phaser.Scene {
         this.characters.set(1, char1);
         this.characters.set(2, char2);
 
-        // Log connection status
-        console.log(
-            `✓ Connected to Room ${this.roomId} | Player ${this.playerNumber}/2`,
-        );
-
-        // Setup network callbacks for remote character updates
-        if (this.networkManager) {
-            this.networkManager.onHeroMove((data: any) => {
-                const playerNum =
-                    data.playerNumber || (data.playerId === "player1" ? 1 : 2);
-                const char = this.characters.get(playerNum);
-                if (char && !char.isLocalPlayer) {
-                    char.updateRemotePosition(data.x, data.y);
-                }
+        // Listen for incoming hero movements from other players
+        const handleHeroMoved = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { playerNumber, x, y } = customEvent.detail;
+            console.log(`Hero moved event for player ${playerNumber}`, {
+                x,
+                y,
             });
-        }
+
+            const char = this.characters.get(playerNumber);
+            if (char && !char.isLocalPlayer) {
+                console.log(
+                    `Updating remote position for player ${playerNumber}`,
+                );
+                char.updateRemotePosition(x, y);
+            }
+        };
+
+        window.addEventListener("heroMoved", handleHeroMoved);
+
+        // Clean up listener on shutdown
+        this.events.on("shutdown", () => {
+            window.removeEventListener("heroMoved", handleHeroMoved);
+        });
 
         EventBus.emit("current-scene-ready-3", this);
     }

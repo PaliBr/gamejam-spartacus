@@ -9,6 +9,7 @@ export class MainMenu extends Scene {
     createRoomButton: GameObjects.Text;
     joinRoomButton: GameObjects.Text;
     testGameButton: GameObjects.Text;
+    testConnectionButton: GameObjects.Text;
 
     constructor() {
         super("MainMenu");
@@ -81,6 +82,28 @@ export class MainMenu extends Scene {
                 this.testGame();
             });
 
+        this.testConnectionButton = this.add
+            .text(this.scale.width * 0.5, 504, "Test Connection", {
+                fontFamily: "Arial Black",
+                fontSize: 28,
+                color: "#ffffff",
+                stroke: "#000000",
+                strokeThickness: 6,
+                align: "center",
+            })
+            .setOrigin(0.5)
+            .setDepth(100)
+            .setInteractive({ useHandCursor: true })
+            .on("pointerover", () => {
+                this.testConnectionButton.setColor("#ffff00");
+            })
+            .on("pointerout", () => {
+                this.testConnectionButton.setColor("#ffffff");
+            })
+            .on("pointerdown", () => {
+                this.testConnection();
+            });
+
         EventBus.emit("current-scene-ready", this);
     }
 
@@ -109,6 +132,15 @@ export class MainMenu extends Scene {
         }
 
         this.scene.start("MainGameScene");
+    }
+
+    testConnection() {
+        if (this.logoTween) {
+            this.logoTween.stop();
+            this.logoTween = null;
+        }
+
+        this.scene.start("TestConnection");
     }
 
     changeScene() {

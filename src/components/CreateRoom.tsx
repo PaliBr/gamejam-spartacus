@@ -139,7 +139,7 @@ export function CreateRoom({ onRoomCreated, onError }: CreateRoomProps) {
                     How it works:
                 </h3>
                 <ul className="text-xs text-slate-400 space-y-1">
-                    <li>• You'll receive a unique 6-character room code</li>
+                    <li>• You'll receive a unique 5-character room code</li>
                     <li>• Share the code with your friend</li>
                     <li>• Game starts when both players are ready</li>
                 </ul>

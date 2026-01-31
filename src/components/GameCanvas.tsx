@@ -24,6 +24,13 @@ export function GameCanvas({
     const [connected, setConnected] = useState(false);
     const [latency, setLatency] = useState(0);
     const [messageCount, setMessageCount] = useState(0);
+    const [isPortrait, setIsPortrait] = useState(
+        window.innerHeight > window.innerWidth,
+    );
+    const isMobile =
+        /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent,
+        );
 
     useEffect(() => {
         const initialize = async () => {
@@ -36,7 +43,31 @@ export function GameCanvas({
 
         initialize();
 
+        // Mobile orientation listener
+        const handleOrientationChange = () => {
+            const newIsPortrait = window.innerHeight > window.innerWidth;
+            setIsPortrait(newIsPortrait);
+
+            // Request fullscreen when landscape
+            if (!newIsPortrait && isMobile) {
+                const element = document.documentElement;
+                if (element.requestFullscreen) {
+                    element.requestFullscreen().catch((err) => {
+                        console.log("Fullscreen request failed:", err);
+                    });
+                }
+            }
+        };
+
+        window.addEventListener("orientationchange", handleOrientationChange);
+        window.addEventListener("resize", handleOrientationChange);
+
         return () => {
+            window.removeEventListener(
+                "orientationchange",
+                handleOrientationChange,
+            );
+            window.removeEventListener("resize", handleOrientationChange);
             cleanup();
         };
     }, []);
@@ -122,14 +153,39 @@ export function GameCanvas({
                             },
                         }),
                     );
+                } else if (payload.action_type === "spawn_enemies") {
+                    window.dispatchEvent(
+                        new CustomEvent("spawnEnemies", {
+                            detail: {
+                                enemies: payload.action_data.enemies,
+                            },
+                        }),
+                    );
                 } else if (payload.action_type === "build_tower") {
                     window.dispatchEvent(
                         new CustomEvent("towerBuilt", {
                             detail: {
                                 playerId: payload.player_id,
-                                towerType: payload.action_data.towerType,
+                                towerId: payload.action_data.towerId,
                                 x: payload.action_data.x,
                                 y: payload.action_data.y,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "enemy_killed") {
+                    window.dispatchEvent(
+                        new CustomEvent("enemyKilled", {
+                            detail: {
+                                enemyId: payload.action_data.enemyId,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "toggle_mask") {
+                    window.dispatchEvent(
+                        new CustomEvent("maskToggled", {
+                            detail: {
+                                playerNumber: payload.action_data.playerNumber,
+                                hasMask: payload.action_data.hasMask,
                             },
                         }),
                     );
@@ -203,6 +259,18 @@ export function GameCanvas({
         // No additional listeners needed - NetworkManager handles broadcasts directly
     };
 
+    const restartWave = () => {
+        if (gameRef.current) {
+            const scene = gameRef.current.scene.getScene(
+                "MainGameScene",
+            ) as any;
+            if (scene && scene.spawnInitialEnemies) {
+                console.log("🔄 Restarting wave...");
+                scene.spawnInitialEnemies();
+            }
+        }
+    };
+
     const cleanup = async () => {
         if (channelRef.current) {
             await supabase.removeChannel(channelRef.current);
@@ -214,6 +282,22 @@ export function GameCanvas({
 
     return (
         <div className="relative w-full h-screen bg-slate-900">
+            {/* Mobile Portrait Instruction Overlay */}
+            {isMobile && isPortrait && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                    <div className="text-center text-white space-y-6">
+                        <div className="text-5xl">📱</div>
+                        <h1 className="text-3xl font-bold">
+                            Turn to Landscape
+                        </h1>
+                        <p className="text-xl text-gray-300">
+                            Please rotate your device to landscape mode to play
+                        </p>
+                        <div className="text-6xl animate-bounce">⤴️</div>
+                    </div>
+                </div>
+            )}
+
             {/* Phaser Game Container */}
             <div id="phaser-container" className="w-full h-full" />
 
@@ -256,6 +340,14 @@ export function GameCanvas({
                     </div>
                     <div className="text-slate-300 text-sm">
                         <span className="font-semibold">Messages:</span>{" "}
+                        <button
+                            onClick={restartWave}
+                            className="absolute top-4 left-40 bg-purple-800 hover:bg-purple-700 
+                   px-4 py-2 rounded-lg text-white font-semibold transition-colors
+                   pointer-events-auto"
+                        >
+                            🔄 Restart Wave
+                        </button>{" "}
                         {messageCount}
                     </div>
                 </div>

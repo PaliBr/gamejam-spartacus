@@ -74,6 +74,7 @@ export class MainGameScene extends Phaser.Scene {
         [2, 0],
     ]);
     private lastBroadcastedSpeed: number = 1;
+    private winBroadcasted: boolean = false;
 
     // Music alternating system
     private currentMusicIndex: number = 0; // 0 = gameMusic1, 1 = gameMusic2
@@ -941,6 +942,14 @@ export class MainGameScene extends Phaser.Scene {
 
         window.addEventListener("bookActivated", handleBookActivated);
 
+        const handleGameWon = (event: Event) => {
+            if (this.scene.isActive("YouWin")) return;
+            this.sound.stopAll();
+            this.scene.start("YouWin");
+        };
+
+        window.addEventListener("gameWon", handleGameWon);
+
         // Player 1 spawns the initial 20 enemies
         if (this.playerNumber === 1) {
             // Spawn after a short delay to ensure everything is set up
@@ -977,6 +986,7 @@ export class MainGameScene extends Phaser.Scene {
             window.removeEventListener("maskActivated", handleMaskActivated);
             window.removeEventListener("maskExpired", handleMaskExpired);
             window.removeEventListener("bookActivated", handleBookActivated);
+            window.removeEventListener("gameWon", handleGameWon);
         });
 
         EventBus.emit("current-scene-ready-3", this);
@@ -991,6 +1001,12 @@ export class MainGameScene extends Phaser.Scene {
         const player2Food = this.playerTotalFood.get(2) || 0;
         // if (player1Food >= 80 && player2Food >= 80) {
         if (player1Food >= 15) {
+            if (!this.winBroadcasted && this.networkManager) {
+                this.winBroadcasted = true;
+                this.networkManager.sendAction("game_won", {
+                    triggeredBy: this.playerNumber,
+                });
+            }
             this.sound.stopAll();
             this.scene.start("YouWin");
             return;

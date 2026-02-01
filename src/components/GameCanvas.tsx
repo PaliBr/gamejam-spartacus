@@ -3,6 +3,7 @@ import Phaser from "phaser";
 import { supabase } from "../services/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { MainGameScene } from "../game/scenes/MainGameScene";
+import { YouWin } from "../game/scenes/YouWin";
 import { NetworkManager } from "../game/managers/NetworkManager";
 
 interface GameCanvasProps {
@@ -83,7 +84,7 @@ export function GameCanvas({
             width: 1280,
             height: 720,
             backgroundColor: "#1a1a2e",
-            scene: [MainGameScene],
+            scene: [MainGameScene, YouWin],
             physics: {
                 default: "arcade",
                 arcade: {
@@ -323,6 +324,14 @@ export function GameCanvas({
                         new CustomEvent("bookActivated", {
                             detail: {
                                 playerNumber: payload.action_data.playerNumber,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "game_won") {
+                    window.dispatchEvent(
+                        new CustomEvent("gameWon", {
+                            detail: {
+                                triggeredBy: payload.action_data.triggeredBy,
                             },
                         }),
                     );

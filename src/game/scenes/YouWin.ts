@@ -8,15 +8,24 @@ export class YouWin extends Scene {
 
     preload() {
         this.load.audio("winningMusic", "assets/winning.mp3");
+        this.load.on("loaderror", (file: Phaser.Loader.File) => {
+            if (file.key === "winningMusic") {
+                console.warn("⚠️ Failed to load winningMusic", file);
+            }
+        });
     }
 
     create() {
-        // Play winning music
-        const music = this.sound.add("winningMusic", {
-            loop: true,
-            volume: 0.6,
-        });
-        music.play();
+        // Play winning music if loaded
+        if (this.cache.audio.exists("winningMusic")) {
+            const music = this.sound.add("winningMusic", {
+                loop: true,
+                volume: 0.6,
+            });
+            music.play();
+        } else {
+            console.warn("⚠️ winningMusic not in cache, skipping playback");
+        }
         console.log("🎉 YouWin scene create() called");
         const centerX = this.scale.width / 2;
         const centerY = this.scale.height / 2;

@@ -50,6 +50,7 @@ export class NetworkManager {
             "mask_activated",
             "mask_expired",
             "book_activated",
+            "game_won",
         ];
 
         if (this.channel) {

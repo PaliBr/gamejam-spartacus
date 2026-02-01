@@ -15,6 +15,10 @@ export class DevScene extends Phaser.Scene {
     targetPositions: Array<{ x: number; y: number }> = [];
     private enemySpawnButton: Phaser.GameObjects.Rectangle | null = null;
     private enemySpawnText: Phaser.GameObjects.Text | null = null;
+    private readonly GRID_SIZE = 40;
+    private readonly FARM_SIZE = 120;
+    private readonly GRID_SIZE = 40;
+    private readonly FARM_SIZE = 120;
     // Food inventory system
     totalFood: number = 10;
     private baseFood: number = 10;
@@ -611,13 +615,8 @@ export class DevScene extends Phaser.Scene {
             tower.flushKilledEnemies();
         });
 
-        // Update all farms (production, enemy detection)
         this.farms.forEach((farm) => {
             farm.update(dt, this.enemies);
-        });
-
-        // Apply farm production deltas
-        this.farms.forEach((farm) => {
             const last = this.farmLastFood.get(farm.farmId) || 0;
             const delta = farm.totalFood - last;
             if (delta > 0) {

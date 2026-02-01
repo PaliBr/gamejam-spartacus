@@ -137,6 +137,7 @@ export class TowerSelectionPopup {
             0.8,
         );
         button.setStrokeStyle(2, 0xffffff);
+        button.setDepth(2001); // Ensure button is above container
         button.setInteractive({ cursor: "pointer" });
 
         const buttonText = this.scene.add.text(x, y, text, {

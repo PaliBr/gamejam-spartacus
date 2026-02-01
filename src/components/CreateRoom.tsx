@@ -35,16 +35,6 @@ export function CreateRoom({ onRoomCreated, onError }: CreateRoomProps) {
                 username,
             );
 
-            console.log("Room created:", { room, roomCode, player });
-            console.log("Room ID:", room.room_id);
-            console.log(
-                "Calling onRoomCreated with:",
-                room.room_id,
-                roomCode,
-                playerId,
-                player.room_player_id,
-            );
-
             onRoomCreated(
                 room.room_id,
                 roomCode,

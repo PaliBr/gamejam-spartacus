@@ -75,9 +75,9 @@ export class Enemy extends Phaser.GameObjects.Sprite {
         body.setCollideWorldBounds(false);
         body.setDrag(0, 0); // No friction
 
-        // Set initial target: keep same X (move straight up), turn at tile 5 Y
+        // Set initial target: keep same X (move straight up), turn at tile 6 Y (reduced from 5)
         this.targetX = config.x; // Keep starting X position
-        this.targetY = 5 * 40 + 20; // Tile 5, centered in grid cell
+        this.targetY = 6 * 40 + 20; // Tile 6, centered in grid cell (1 grid cell less vertical movement)
     }
 
     update() {
@@ -138,20 +138,20 @@ export class Enemy extends Phaser.GameObjects.Sprite {
                 this.enemyState = "moving_to_side";
 
                 // Calculate side movement X based on enemy type
-                // Grid positions: Left [10,6,6,10], Right [19,23,23,19] (40px grid)
+                // Grid positions: Left [10,5,5,10], Right [19,24,24,19] (40px grid)
                 // Add 20 to center in grid cell (40px cell, center at +20)
                 const leftXPositions = [
                     10 * 40 + 20,
-                    6 * 40 + 20,
-                    6 * 40 + 20,
+                    5 * 40 + 20,
+                    5 * 40 + 20,
                     10 * 40 + 20,
-                ]; // [420, 260, 260, 420]
+                ]; // [420, 220, 220, 420]
                 const rightXPositions = [
                     19 * 40 + 20,
-                    23 * 40 + 20,
-                    23 * 40 + 20,
+                    24 * 40 + 20,
+                    24 * 40 + 20,
                     19 * 40 + 20,
-                ]; // [780, 940, 940, 780]
+                ]; // [780, 980, 980, 780]
 
                 if (this.enemyType === 0) {
                     // Type 0 (Red): Grid column 10 (left) or 19 (right)
@@ -159,12 +159,12 @@ export class Enemy extends Phaser.GameObjects.Sprite {
                         ? leftXPositions[0]
                         : rightXPositions[0];
                 } else if (this.enemyType === 1) {
-                    // Type 1 (Blue): Grid column 6 (left) or 23 (right)
+                    // Type 1 (Blue): Grid column 5 (left) or 24 (right)
                     this.targetX = this.goingLeft
                         ? leftXPositions[1]
                         : rightXPositions[1];
                 } else if (this.enemyType === 2) {
-                    // Type 2 (Yellow): Grid column 6 (left) or 23 (right)
+                    // Type 2 (Yellow): Grid column 5 (left) or 24 (right)
                     this.targetX = this.goingLeft
                         ? leftXPositions[2]
                         : rightXPositions[2];
@@ -203,7 +203,7 @@ export class Enemy extends Phaser.GameObjects.Sprite {
                 // Reached side X position, now sharp turn to final target
                 this.enemyState = "moving_to_target";
 
-                // Farm grid positions: Left [(6,1), (10,1), (6,7), (10,7)], Right [(23,1), (19,1), (23,7), (19,7)]
+                // Farm grid positions: Left [(5,1), (10,1), (5,7), (10,7)], Right [(24,1), (19,1), (24,7), (19,7)]
                 // Farm types: [wheat(yellow), carrot(red), sunflower(blue), potato(green)]
                 // Enemy type mapping: 0=Red→Carrot(1), 1=Blue→Sunflower(2), 2=Yellow→Wheat(0), 3=Green→Potato(3)
 

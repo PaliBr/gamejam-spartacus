@@ -68,10 +68,6 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
             Phaser.Geom.Circle.Contains,
         );
         this.setData("isClickable", true);
-
-        console.log(
-            `🪤 Trap ${this.trapId} (type ${this.trapType}) built at (${config.x}, ${config.y})`,
-        );
     }
 
     upgrade(): boolean {
@@ -85,9 +81,6 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
                 mainScene.playerGold?.get(this.playerNumber) || 0;
 
             if (currentGold < upgradeCost) {
-                console.log(
-                    `❌ Not enough gold to upgrade trap tower (need ${upgradeCost}, have ${currentGold})`,
-                );
                 return false;
             }
 
@@ -115,9 +108,6 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
                 });
             }
 
-            console.log(
-                `⬆️ Trap tower upgraded to level ${this.level} for ${upgradeCost} gold. Max capacity: ${this.maxCapacity}`,
-            );
             return true;
         }
         return false;
@@ -127,9 +117,6 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
         if (this.level > 1) {
             this.level--;
             this.maxCapacity = 3 + (this.level - 1);
-            console.log(
-                `⬇️ Trap tower downgraded to level ${this.level}. Max capacity: ${this.maxCapacity}`,
-            );
             return true;
         }
         return false;
@@ -163,9 +150,6 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
                 if (!this.trappedEnemies.has(enemyId)) {
                     this.trappedEnemies.add(enemyId);
                     this.enemyTimers.set(enemyId, 0);
-                    console.log(
-                        `🪤 Trap ${this.trapId} attracted enemy ${enemyId}`,
-                    );
 
                     // Set enemy to attracted state
                     (enemy as any).isAttractedToTrap = true;
@@ -185,9 +169,6 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
                 const enemy = enemies.get(enemyId);
                 if (enemy) {
                     enemy.destroy();
-                    console.log(
-                        `🪤 Trap ${this.trapId} despawned enemy ${enemyId}`,
-                    );
                 }
                 enemiesToRemove.push(enemyId);
 

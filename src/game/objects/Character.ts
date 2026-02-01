@@ -84,12 +84,6 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
             this.play("farmer_idle");
         }
 
-        console.log(
-            `Character created: ${config.playerId} at (${config.x}, ${config.y}), isLocal: ${config.isLocalPlayer}`,
-        );
-        console.log(`Character visible: ${this.visible}, alpha: ${this.alpha}`);
-        console.log(`Character texture: ${this.texture.key}`);
-
         // Create mask graphic (initially hidden)
         this.maskGraphic = config.scene.add.graphics();
         this.maskGraphic.setDepth(11); // Above character sprite
@@ -97,22 +91,13 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
 
         // Setup mouse click handler for local player
         if (this.isLocalPlayer) {
-            console.log(
-                `🖱️ Setting up click handler for local player ${this.playerNumber}`,
-            );
             config.scene.input.on(
                 "pointerdown",
                 (pointer: Phaser.Input.Pointer) => {
-                    console.log(
-                        `🎯 Click detected at (${pointer.worldX}, ${pointer.worldY}) for player ${this.playerNumber}`,
-                    );
                     this.moveTo(pointer.worldX, pointer.worldY);
 
                     // Notify network manager of movement
                     if (this.networkManager) {
-                        console.log(
-                            `📤 Sending hero_move action via NetworkManager`,
-                        );
                         this.networkManager.sendAction("hero_move", {
                             x: pointer.worldX,
                             y: pointer.worldY,
@@ -122,10 +107,6 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
                         console.warn(`⚠️ NetworkManager not available!`);
                     }
                 },
-            );
-        } else {
-            console.log(
-                `👁️ This is a remote player ${this.playerNumber}, no click handler`,
             );
         }
     }

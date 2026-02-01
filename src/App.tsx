@@ -35,12 +35,6 @@ export default function App() {
         pId: string,
         rPlayerId: string,
     ) => {
-        console.log("handleRoomCreated called with:", {
-            id,
-            code,
-            pId,
-            rPlayerId,
-        });
         setRoomId(id);
         setRoomCode(code);
         setPlayerId(pId);
@@ -48,7 +42,6 @@ export default function App() {
         setPlayerNumber(1);
         setIsHost(true);
         setGameState("lobby");
-        console.log("State updated to lobby");
     };
 
     const handleRoomJoined = (
@@ -58,13 +51,6 @@ export default function App() {
         rPlayerId: string,
         pNum: number,
     ) => {
-        console.log("handleRoomJoined called with:", {
-            id,
-            code,
-            pId,
-            rPlayerId,
-            pNum,
-        });
         setRoomId(id);
         setRoomCode(code);
         setPlayerId(pId);
@@ -72,7 +58,6 @@ export default function App() {
         setPlayerNumber(pNum);
         setIsHost(false);
         setGameState("lobby");
-        console.log("State updated to lobby");
     };
 
     const handleGameStart = () => {

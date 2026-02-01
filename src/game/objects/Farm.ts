@@ -41,7 +41,7 @@ export class Farm extends Phaser.GameObjects.Rectangle {
             120, // 3x3 grid cells
             120,
             color,
-            0.3,
+            0, // No fill
         );
 
         this.farmId = config.farmId;
@@ -55,7 +55,7 @@ export class Farm extends Phaser.GameObjects.Rectangle {
 
         // Visual setup
         this.setOrigin(0, 0); // Set origin to top-left for grid alignment
-        this.setStrokeStyle(3, color, 1);
+        this.setStrokeStyle(0, color, 0); // No stroke
         this.setDepth(0);
         this.setInteractive(
             new Phaser.Geom.Rectangle(0, 0, 120, 120),
@@ -63,26 +63,11 @@ export class Farm extends Phaser.GameObjects.Rectangle {
         );
         this.setData("isClickable", true);
 
-        // Add hover effects to highlight the clickable area
-        this.on("pointerover", () => {
-            this.setStrokeStyle(4, color, 1);
-            this.setFillStyle(color, 0.5);
-        });
-
-        this.on("pointerout", () => {
-            this.setStrokeStyle(3, color, 1);
-            this.setFillStyle(color, 0.3);
-        });
-
         // Create level indicator
         this.createLevelIndicator();
 
         // Create production rate display
         this.createProductionText();
-
-        console.log(
-            `🌾 Farm created: ${this.farmType} (${config.farmId}) at level ${this.level}`,
-        );
     }
 
     private createLevelIndicator() {
@@ -149,9 +134,6 @@ export class Farm extends Phaser.GameObjects.Rectangle {
                 mainScene.playerGold?.get(this.playerNumber) || 0;
 
             if (currentGold < upgradeCost) {
-                console.log(
-                    `❌ Not enough gold to upgrade ${this.farmType} (need ${upgradeCost}, have ${currentGold})`,
-                );
                 return false;
             }
 
@@ -179,9 +161,6 @@ export class Farm extends Phaser.GameObjects.Rectangle {
                 });
             }
 
-            console.log(
-                `⬆️ Farm ${this.farmType} upgraded to level ${this.level} for ${upgradeCost} gold`,
-            );
             return true;
         }
         return false;
@@ -190,7 +169,6 @@ export class Farm extends Phaser.GameObjects.Rectangle {
     downgrade() {
         // Wheat cannot be downgraded below level 1
         if (this.farmType === "wheat" && this.level <= 1) {
-            console.log(`⛔ Wheat cannot be downgraded below level 1`);
             return;
         }
 
@@ -198,24 +176,15 @@ export class Farm extends Phaser.GameObjects.Rectangle {
             this.level--;
             this.productionTimer = 0;
             this.updateLevelIcon();
-            console.log(
-                `⬇️ Farm ${this.farmType} downgraded to level ${this.level}`,
-            );
         }
     }
 
     addEnemyOnFarm(enemyId: string) {
         this.enemiesOnFarm.add(enemyId);
-        console.log(
-            `🐛 Enemy added to ${this.farmType} farm. Total: ${this.enemiesOnFarm.size}`,
-        );
     }
 
     removeEnemyFromFarm(enemyId: string) {
         this.enemiesOnFarm.delete(enemyId);
-        console.log(
-            `✅ Enemy removed from ${this.farmType} farm. Total: ${this.enemiesOnFarm.size}`,
-        );
     }
 
     getProductionRate(): number {
@@ -290,9 +259,6 @@ export class Farm extends Phaser.GameObjects.Rectangle {
             this.totalFood += productionRate;
             this.totalFood = Math.round(this.totalFood * 10) / 10;
             this.productionTimer -= 5000;
-            console.log(
-                `🌾 ${this.farmType} produced ${productionRate} food. Total: ${this.totalFood}`,
-            );
         }
 
         // Update production rate display

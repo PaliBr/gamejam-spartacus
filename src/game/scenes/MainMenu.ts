@@ -15,7 +15,14 @@ export class MainMenu extends Scene {
         super("MainMenu");
     }
 
+    preload() {
+        this.load.audio("menuMusic", "assets/Menu.mp3");
+    }
+
     create() {
+        // Play menu music
+        const music = this.sound.add("menuMusic", { loop: true, volume: 0.5 });
+        music.play();
         this.createRoomButton = this.add
             .text(this.scale.width * 0.5, 344, "Create Room", {
                 fontFamily: "Arial Black",
@@ -113,6 +120,7 @@ export class MainMenu extends Scene {
             this.logoTween = null;
         }
 
+        this.sound.stopAll();
         this.scene.start("CreateRoom");
     }
 
@@ -122,6 +130,7 @@ export class MainMenu extends Scene {
             this.logoTween = null;
         }
 
+        this.sound.stopAll();
         this.scene.start("JoinRoom");
     }
 
@@ -131,6 +140,7 @@ export class MainMenu extends Scene {
             this.logoTween = null;
         }
 
+        this.sound.stopAll();
         this.scene.start("MainGameScene");
     }
 
@@ -140,6 +150,7 @@ export class MainMenu extends Scene {
             this.logoTween = null;
         }
 
+        this.sound.stopAll();
         this.scene.start("TestConnection");
     }
 

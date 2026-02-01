@@ -50,8 +50,8 @@ export class MainGameScene extends Phaser.Scene {
     foodBars: Map<number, Phaser.GameObjects.Rectangle> = new Map();
     foodTexts: Map<number, Phaser.GameObjects.Text> = new Map();
     private foodBarWidth: number = 576; // 90% of player side (640 * 0.9)
-    private foodBarHeight: number = 40;
-    private foodBarMaxValue: number = 1000;
+    private foodBarHeight: number = 20;
+    private foodBarMaxValue: number = 200;
     // Food consumption system (per player)
     private consumptionTimers: Map<number, number> = new Map([
         [1, 0],
@@ -74,6 +74,10 @@ export class MainGameScene extends Phaser.Scene {
         [2, 0],
     ]);
     private lastBroadcastedSpeed: number = 1;
+
+    // Music alternating system
+    private currentMusicIndex: number = 0; // 0 = gameMusic1, 1 = gameMusic2
+    private currentMusic: Phaser.Sound.BaseSound | null = null;
 
     // Spawnable elements (food, mask, book)
     spawnableElements: Map<string, SpawnableElement> = new Map();
@@ -277,9 +281,24 @@ export class MainGameScene extends Phaser.Scene {
                 repeat: -1,
             });
         }
+
+        // Load tower spritesheet (7 frames, 120x120 each)
+        if (!this.textures.exists("tower")) {
+            this.load.spritesheet("tower", "/assets/tower.png", {
+                frameWidth: 60,
+                frameHeight: 60,
+            });
+        }
+
+        // Load game music
+        this.load.audio("gameMusic1", "assets/inGame1.mp3");
+        this.load.audio("gameMusic2", "assets/Flute.mp3");
     }
 
     create() {
+        // Start music alternating system with gameMusic1
+        this.playNextMusic();
+
         // Add map.png as background (scaled to fit screen)
         const bg = this.add.image(
             this.scale.width / 2,
@@ -332,10 +351,10 @@ export class MainGameScene extends Phaser.Scene {
         // Left side: 4x4 grid, aligned to 40px grid
         // Using grid coordinates (each grid cell = 40px)
         // 1280x720 = 32 columns × 18 rows
-        const targetLeftXGrid = [6, 10, 6, 10]; // Grid positions from left
+        const targetLeftXGrid = [5, 10, 5, 10]; // Grid positions from left
         const targetLeftYGrid = [1, 1, 7, 7]; // Grid positions from top
         // Right side: mirrored
-        const targetRightXGrid = [23, 19, 23, 19]; // Grid positions from left (32 columns, mirrored)
+        const targetRightXGrid = [24, 19, 24, 19]; // Grid positions from left (32 columns, mirrored)
         const targetRightYGrid = [1, 1, 7, 7]; // Grid positions from top
 
         // Create farms on left side
@@ -382,15 +401,6 @@ export class MainGameScene extends Phaser.Scene {
             this.farms.set(farm.farmId, farm);
         });
 
-        // Highlight actual farm detection areas (for debugging)
-        this.farms.forEach((farm) => {
-            this.add
-                .rectangle(farm.x, farm.y, 120, 120, 0x00ffff, 0)
-                .setOrigin(0, 0)
-                .setStrokeStyle(2, 0x00ffff, 0.8)
-                .setDepth(1);
-        });
-
         // Create cityTarget areas (4x4 grid squares = 160x160px)
         // Left side: row 7, column 3 from left edge (column 3)
         // Right side: row 7, column 3 from right edge (mirrored)
@@ -401,118 +411,37 @@ export class MainGameScene extends Phaser.Scene {
         // Left city target (player 1)
         const leftCityX = cityTargetColFromEdge * gridSize;
         const leftCityY = cityTargetRow * gridSize;
-        this.add
-            .rectangle(
-                leftCityX,
-                leftCityY,
-                cityTargetSize,
-                cityTargetSize,
-                0x888888,
-                0.4,
-            )
-            .setOrigin(0, 0)
-            .setStrokeStyle(3, 0xaaaaaa, 1)
-            .setDepth(0);
 
         // Right city target (player 2) - mirrored position
         // 160px from right edge: (1280 - 160) / 40 = 28
         const rightCityX = 28 * gridSize;
         const rightCityY = cityTargetRow * gridSize;
-        this.add
-            .rectangle(
-                rightCityX,
-                rightCityY,
-                cityTargetSize,
-                cityTargetSize,
-                0x888888,
-                0.4,
-            )
-            .setOrigin(0, 0)
-            .setStrokeStyle(3, 0xaaaaaa, 1)
-            .setDepth(0);
 
         // Create common target area at bottom center (8x5 grid cells = 320x200px)
-        // Shifted 1 tile left: 4 tiles left and 4 tiles right from middle (tiles 11-18)
+        // Centered: 4 tiles left and 4 tiles right from middle (tiles 12-19)
         // Bottom: last 5 rows (rows 13-17 in 0-indexed, y from 520 to 720)
         const commonTargetWidth = 8 * gridSize; // 320px
         const commonTargetHeight = 5 * gridSize; // 200px
-        const commonTargetX = midX - gridSize; // Shift left by 1 tile
+        const commonTargetX = midX; // Centered
         const commonTargetY = this.scale.height - commonTargetHeight / 2; // Bottom, centered vertically in the 5 rows
-
-        this.add
-            .rectangle(
-                commonTargetX,
-                commonTargetY,
-                commonTargetWidth,
-                commonTargetHeight,
-                0xff8800,
-                0.3,
-            )
-            .setStrokeStyle(3, 0xff8800, 1)
-            .setDepth(0);
 
         const leftMenuWidth = 12 * gridSize;
         const rightMenuWidth = 12 * gridSize;
         const sideMenuHeight = 5 * gridSize;
 
-        // Left menu area (bottom-left corner)
-        this.add
-            .rectangle(
-                leftMenuWidth / 2,
-                this.scale.height - sideMenuHeight / 2,
-                leftMenuWidth,
-                sideMenuHeight,
-                0x222222,
-                0.6,
-            )
-            .setStrokeStyle(2, 0x666666, 0.8)
-            .setDepth(0);
-
-        // Right menu area (bottom-right corner)
-        this.add
-            .rectangle(
-                this.scale.width - rightMenuWidth / 2,
-                this.scale.height - sideMenuHeight / 2,
-                rightMenuWidth,
-                sideMenuHeight,
-                0x222222,
-                0.6,
-            )
-            .setStrokeStyle(2, 0x666666, 0.8)
-            .setDepth(0);
-
         // Define restricted zones
         const restrictedZones = [
             {
                 rows: [5],
-                columns: Array.from({ length: 11 }, (_, i) => i + 4).concat(
-                    Array.from({ length: 11 }, (_, i) => i + 17),
-                ), // Columns 4-13 and 16-21
+                columns: Array.from({ length: 12 }, (_, i) => i + 3).concat(
+                    Array.from({ length: 12 }, (_, i) => i + 17),
+                ), // Columns 3-14 and 17-28
             },
             {
                 rows: Array.from({ length: 7 }, (_, i) => i + 6),
                 columns: [14, 17],
             },
         ];
-
-        // Highlight restricted zones
-        restrictedZones.forEach((zone) => {
-            zone.rows.forEach((row) => {
-                zone.columns.forEach((col) => {
-                    this.add
-                        .rectangle(
-                            col * gridSize + gridSize / 2,
-                            row * gridSize + gridSize / 2,
-                            gridSize,
-                            gridSize,
-                            0xff0000,
-                            0.3,
-                        )
-                        .setStrokeStyle(2, 0xff0000, 0.8)
-                        .setDepth(0);
-                });
-            });
-        });
 
         // Create food bar UI at top
         this.createFoodBar();
@@ -1056,6 +985,16 @@ export class MainGameScene extends Phaser.Scene {
     update(time: number, dt: number) {
         // Track game time for consumption scaling
         this.gameTime += dt;
+
+        // Check winning condition: both players reach 200 food
+        const player1Food = this.playerTotalFood.get(1) || 0;
+        const player2Food = this.playerTotalFood.get(2) || 0;
+        // if (player1Food >= 80 && player2Food >= 80) {
+        if (player1Food >= 15) {
+            this.sound.stopAll();
+            this.scene.start("YouWin");
+            return;
+        }
 
         // Broadcast game state every 1 second (player 1 to player 2)
         if (this.playerNumber === 1 && time % 1000 < dt) {
@@ -1685,7 +1624,7 @@ export class MainGameScene extends Phaser.Scene {
         [1, 2].forEach((playerNum) => {
             // Player 1 on left, Player 2 on right (centered in their 640px side)
             const x = playerNum === 1 ? 320 : this.scale.width - 320;
-            const y = 30;
+            const y = 12;
 
             // Outer black border (shadow/depth effect)
             this.add
@@ -1976,6 +1915,26 @@ export class MainGameScene extends Phaser.Scene {
         }
     }
 
+    private playNextMusic() {
+        // Determine which track to play
+        const musicKey =
+            this.currentMusicIndex === 0 ? "gameMusic1" : "gameMusic2";
+
+        // Play the track without looping
+        this.currentMusic = this.sound.add(musicKey, {
+            loop: false,
+            volume: 0.4,
+        });
+        this.currentMusic.play();
+
+        // When music completes, play the next track
+        this.currentMusic.once("complete", () => {
+            // Toggle between 0 and 1
+            this.currentMusicIndex = this.currentMusicIndex === 0 ? 1 : 0;
+            this.playNextMusic();
+        });
+    }
+
     private showFloatingText(
         playerNum: number,
         text: string,
@@ -2025,8 +1984,8 @@ export class MainGameScene extends Phaser.Scene {
         const commonTargetWidth = 8 * 40;
         const commonTargetHeight = 5 * 40;
         const commonTargetMinY = this.scale.height - commonTargetHeight; // last 5 rows
-        const commonTargetMinX = midX - commonTargetWidth / 2 - 40; // shift left by 1 tile
-        const commonTargetMaxX = midX + commonTargetWidth / 2 - 40;
+        const commonTargetMinX = midX - commonTargetWidth / 2; // centered
+        const commonTargetMaxX = midX + commonTargetWidth / 2;
 
         return (
             y >= commonTargetMinY &&
@@ -2453,7 +2412,7 @@ export class MainGameScene extends Phaser.Scene {
     }
 
     private isSpawnPositionValid(x: number, y: number): boolean {
-        const elementSize = 30; // Half-width of element for collision
+        const elementSize = 20; // Half-width of element for collision (reduced from 30 for more spawn space)
         const elementBounds = new Phaser.Geom.Rectangle(
             x - elementSize,
             y - elementSize,
@@ -2548,7 +2507,7 @@ export class MainGameScene extends Phaser.Scene {
         const midX = this.scale.width / 2;
         let x: number, y: number;
         let attempts = 0;
-        const maxAttempts = 10; // Try up to 10 times to find a valid spawn position
+        const maxAttempts = 30; // Try up to 30 times to find a valid spawn position (increased for crowded maps)
 
         // Keep trying to find a valid spawn position
         do {

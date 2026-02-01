@@ -66,11 +66,6 @@ export function GameLobby({
                 onGameStart();
             }
 
-            const playerCount = room.room_players?.length || 0;
-            console.log(
-                `✓ Lobby Active | ${playerCount}/2 players | Status: ${room.status}`,
-            );
-
             setPlayers(room.room_players || []);
         } catch (err) {
             console.error("Failed to load players:", err);

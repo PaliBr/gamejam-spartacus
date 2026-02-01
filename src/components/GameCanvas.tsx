@@ -122,8 +122,6 @@ export function GameCanvas({
 
         // Listen for broadcast actions (fast, no database)
         channel.on("broadcast", { event: "action" }, ({ payload }) => {
-            console.log("⚡ Broadcast action received:", payload);
-
             // Only process if it's not from this player
             if (payload.player_id !== roomPlayerId) {
                 setMessageCount((prev) => prev + 1);
@@ -336,46 +334,29 @@ export function GameCanvas({
         channel.on("presence", { event: "sync" }, () => {
             const state = channel.presenceState();
             const playerCount = Object.keys(state).length;
-            console.log(
-                `🔄 Presence Sync | ${playerCount}/2 players | State:`,
-                state,
-            );
             setConnected(playerCount >= 2);
         });
 
         channel.on("presence", { event: "join" }, ({ key, newPresences }) => {
             const state = channel.presenceState();
             const playerCount = Object.keys(state).length;
-            console.log(
-                `✅ Player Joined: ${key} | ${playerCount}/2 players | Presences:`,
-                newPresences,
-            );
             setConnected(playerCount >= 2);
         });
 
         channel.on("presence", { event: "leave" }, ({ key, leftPresences }) => {
             const state = channel.presenceState();
             const playerCount = Object.keys(state).length;
-            console.log(
-                `❌ Player Left: ${key} | ${playerCount}/2 players | Presences:`,
-                leftPresences,
-            );
             setConnected(playerCount >= 2);
         });
 
         // Subscribe
         await channel.subscribe(async (status) => {
-            console.log(`📡 Channel subscription status: ${status}`);
             if (status === "SUBSCRIBED") {
-                console.log(
-                    `📍 Tracking presence for player ${playerNumber} (${playerId})`,
-                );
                 const trackResult = await channel.track({
                     user_id: playerId,
                     player_number: playerNumber,
                     online_at: new Date().toISOString(),
                 });
-                console.log("📍 Track result:", trackResult);
 
                 // Set channel in NetworkManager for broadcasting
                 if (networkManagerRef.current) {
@@ -404,7 +385,6 @@ export function GameCanvas({
                 "MainGameScene",
             ) as any;
             if (scene && scene.spawnInitialEnemies) {
-                console.log("🔄 Restarting wave...");
                 scene.spawnInitialEnemies();
             }
         }
@@ -461,7 +441,7 @@ export function GameCanvas({
                     </div>
                 </div>
 
-                <div className="bg-slate-800/90 backdrop-blur-sm rounded-lg p-4 space-y-2">
+                {/* <div className="bg-slate-800/90 backdrop-blur-sm rounded-lg p-4 space-y-2">
                     <div className="text-slate-300 text-sm">
                         <span className="font-semibold">Room:</span>{" "}
                         {roomId.slice(0, 8)}...
@@ -486,7 +466,7 @@ export function GameCanvas({
                         </button>{" "}
                         {messageCount}
                     </div>
-                </div>
+                </div>*/}
             </div>
 
             <button

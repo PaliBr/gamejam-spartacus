@@ -21,23 +21,32 @@ export class Tower extends Phaser.GameObjects.Sprite {
     private lastFlushTime: number = 0;
     private flushInterval: number = 1000; // milliseconds
     public level: number = 1; // Tower level (1-5)
+    private isShooting: boolean = false; // Track shooting state
 
     constructor(config: TowerConfig) {
-        super(config.scene, config.x, config.y, "");
+        super(config.scene, config.x, config.y, "tower");
 
         this.towerId = config.towerId;
         this.networkManager = config.networkManager;
         this.playerNumber = config.playerNumber;
-        // Create tower visual (1x2 grid cells = 40x80)
-        const graphics = config.scene.add.graphics();
-        graphics.fillStyle(0x6666ff, 1);
-        graphics.fillRect(0, 0, 40, 80);
-        graphics.generateTexture(`tower-${this.towerId}`, 40, 80);
-        graphics.destroy();
 
-        this.setTexture(`tower-${this.towerId}`);
+        // Create tower_shoot animation if not exists
+        if (!config.scene.anims.exists("tower_shoot")) {
+            config.scene.anims.create({
+                key: "tower_shoot",
+                frames: config.scene.anims.generateFrameNumbers("tower", {
+                    start: 1, // Frames 1-6 for shooting (frame 0 is idle)
+                    end: 6,
+                }),
+                frameRate: 8,
+                repeat: 0, // Play once then stop
+            });
+        }
+
+        this.setTexture("tower");
+        this.setFrame(0); // Start at frame 0 (idle state)
         this.setOrigin(0, 0);
-        this.setDisplaySize(40, 80);
+        this.setDisplaySize(40, 80); // 1x2 grid cells
         config.scene.add.existing(this);
         this.setDepth(5);
         this.setInteractive(
@@ -154,6 +163,9 @@ export class Tower extends Phaser.GameObjects.Sprite {
     }
 
     private shoot(enemy: Enemy) {
+        // Play shooting animation
+        this.play("tower_shoot");
+
         // Create projectile effect (line from tower to enemy)
         const graphics = this.scene.add.graphics();
         graphics.lineStyle(2, 0x6666ff, 1);

@@ -44,10 +44,6 @@ export class SpawnableElement extends Phaser.Physics.Arcade.Sprite {
             yoyo: true,
             repeat: -1,
         });
-
-        console.log(
-            `✨ Spawned ${this.elementType} element at (${config.x}, ${config.y}) - expires in 5s`,
-        );
     }
 
     private updateFrame() {
@@ -84,7 +80,6 @@ export class SpawnableElement extends Phaser.Physics.Arcade.Sprite {
 
         // Destroy if lifetime expired
         if (this.lifeTimer <= 0) {
-            console.log(`⏰ Element ${this.elementType} expired and destroyed`);
             this.destroy();
         }
     }

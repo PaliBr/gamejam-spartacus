@@ -48,19 +48,6 @@ export function JoinRoom({ onRoomJoined, onError }: JoinRoomProps) {
                 username,
             );
 
-            console.log("Successfully joined room:", {
-                room,
-                roomCode,
-                player,
-            });
-            console.log(
-                "Calling onRoomJoined with:",
-                room.room_id,
-                roomCode.toUpperCase(),
-                playerId,
-                player.room_player_id,
-                2,
-            );
             onRoomJoined(
                 room.room_id,
                 roomCode.toUpperCase(),

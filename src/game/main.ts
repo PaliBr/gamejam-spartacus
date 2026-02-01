@@ -8,6 +8,7 @@ import { RoomInit } from "./scenes/RoomInit";
 import { MainGameScene } from "./scenes/MainGameScene";
 import { TestConnection } from "./scenes/TestConnection";
 import { DevScene } from "./scenes/DevScene";
+import { YouWin } from "./scenes/YouWin";
 
 // Check environment
 const isDev = import.meta.env.VITE_ENV === "dev";
@@ -34,6 +35,7 @@ const config: Phaser.Types.Core.GameConfig = {
               RoomInit,
               MainGameScene,
               TestConnection,
+              YouWin,
           ],
     physics: {
         default: "arcade",

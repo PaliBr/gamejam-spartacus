@@ -16,9 +16,6 @@ export class NetworkManager {
 
     setChannel(channel: RealtimeChannel) {
         this.channel = channel;
-        console.log(
-            `📡 NetworkManager: Channel reference set for room ${this.roomId}`,
-        );
     }
 
     async sendAction(actionType: string, actionData: any) {
@@ -32,13 +29,6 @@ export class NetworkManager {
             sequence_number: this.sequenceNumber,
             timestamp: new Date().toISOString(),
         };
-
-        console.log(`📨 NetworkManager.sendAction called:`, {
-            actionType,
-            actionData,
-            roomId: this.roomId,
-            playerId: this.playerId,
-        });
 
         this.actionQueue.push(action);
 
@@ -62,19 +52,15 @@ export class NetworkManager {
             "book_activated",
         ];
 
-        console.log(`📡 Broadcasting action...`);
         if (this.channel) {
             await this.channel.send({
                 type: "broadcast",
                 event: "action",
                 payload: action,
             });
-        } else {
-            console.error(`❌ No channel available for broadcasting!`);
         }
 
         if (!skipDatabase.includes(actionType)) {
-            console.log(`💾 Inserting action to database...`);
             const { data, error } = await supabase
                 .from("actions")
                 .insert(action)
@@ -82,13 +68,7 @@ export class NetworkManager {
 
             if (error) {
                 console.error(`❌ Error inserting action:`, error);
-            } else {
-                console.log(`✅ Action inserted successfully:`, data);
             }
-        } else {
-            console.log(
-                `⚡ Skipping database for real-time action: ${actionType}`,
-            );
         }
 
         return action;

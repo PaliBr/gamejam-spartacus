@@ -286,6 +286,48 @@ export function GameCanvas({
                             },
                         }),
                     );
+                } else if (payload.action_type === "spawn_elements") {
+                    window.dispatchEvent(
+                        new CustomEvent("spawnElements", {
+                            detail: {
+                                elements: payload.action_data.elements,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "element_pickup") {
+                    window.dispatchEvent(
+                        new CustomEvent("elementPickup", {
+                            detail: {
+                                playerNumber: payload.action_data.playerNumber,
+                                elementId: payload.action_data.elementId,
+                                elementType: payload.action_data.elementType,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "mask_activated") {
+                    window.dispatchEvent(
+                        new CustomEvent("maskActivated", {
+                            detail: {
+                                playerNumber: payload.action_data.playerNumber,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "mask_expired") {
+                    window.dispatchEvent(
+                        new CustomEvent("maskExpired", {
+                            detail: {
+                                playerNumber: payload.action_data.playerNumber,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "book_activated") {
+                    window.dispatchEvent(
+                        new CustomEvent("bookActivated", {
+                            detail: {
+                                playerNumber: payload.action_data.playerNumber,
+                            },
+                        }),
+                    );
                 }
             }
         });

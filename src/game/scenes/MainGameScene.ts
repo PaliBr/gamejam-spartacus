@@ -8,6 +8,7 @@ import { Farm } from "../objects/Farm";
 import { FarmPopup } from "../objects/FarmPopup";
 import { TowerPopup } from "../objects/TowerPopup";
 import { TowerSelectionPopup } from "../objects/TowerSelectionPopup";
+import { SpawnableElement, ElementType } from "../objects/SpawnableElement";
 import { NetworkManager } from "../managers/NetworkManager";
 
 interface MainGameSceneData {
@@ -73,6 +74,28 @@ export class MainGameScene extends Phaser.Scene {
         [2, 0],
     ]);
     private lastBroadcastedSpeed: number = 1;
+
+    // Spawnable elements (food, mask, book)
+    spawnableElements: Map<string, SpawnableElement> = new Map();
+    private elementSpawnTimer: number = 0;
+    private elementSpawnInterval: number = Phaser.Math.Between(3000, 6000); // 3-6 seconds
+
+    // Player power-ups (mask and book counts)
+    playerMaskCount: Map<number, number> = new Map([
+        [1, 0],
+        [2, 0],
+    ]);
+    playerBookCount: Map<number, number> = new Map([
+        [1, 0],
+        [2, 0],
+    ]);
+
+    // Mask activation state and timer
+    private maskActivated: boolean = false;
+    private maskTimerExpired: Phaser.Time.TimerEvent | null = null;
+
+    // Book access flag
+    private hasBookAccess: boolean = false;
 
     constructor() {
         super("MainGameScene");
@@ -176,6 +199,60 @@ export class MainGameScene extends Phaser.Scene {
             console.log("✅ Farmer sprite sheet created in MainGameScene");
         } else {
             console.log("✅ farmer texture already exists");
+        }
+
+        // Create spawnable elements texture (food, mask, book)
+        if (!this.textures.exists("spawnable_element")) {
+            const graphics = this.add.graphics();
+            const elementSize = 30;
+            const totalElements = 3; // food, mask, book
+
+            // Food (orange circle)
+            graphics.fillStyle(0xff8800, 1);
+            graphics.fillCircle(15, 15, 12);
+
+            // Mask (purple square with eyes)
+            graphics.fillStyle(0x9932cc, 1);
+            graphics.fillRect(elementSize + 3, 3, 24, 24);
+            graphics.fillStyle(0x000000, 1);
+            graphics.fillCircle(elementSize + 9, 12, 3);
+            graphics.fillCircle(elementSize + 21, 12, 3);
+
+            // Book (cyan rectangle)
+            graphics.fillStyle(0x00aaff, 1);
+            graphics.fillRect(elementSize * 2 + 3, 5, 20, 20);
+            graphics.lineStyle(2, 0x0088cc, 1);
+            graphics.lineBetween(
+                elementSize * 2 + 13,
+                5,
+                elementSize * 2 + 13,
+                25,
+            );
+
+            graphics.generateTexture(
+                "spawnable_element",
+                elementSize * totalElements,
+                elementSize,
+            );
+            graphics.destroy();
+
+            const texture = this.textures.get("spawnable_element");
+            texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+            // Add frame definitions
+            texture.add(
+                "__BASE",
+                0,
+                0,
+                0,
+                elementSize * totalElements,
+                elementSize,
+            );
+            for (let i = 0; i < totalElements; i++) {
+                texture.add(i, 0, i * elementSize, 0, elementSize, elementSize);
+            }
+
+            console.log("✅ Spawnable elements texture created");
         }
 
         // Create walking animation if not exists
@@ -439,6 +516,9 @@ export class MainGameScene extends Phaser.Scene {
 
         // Create food bar UI at top
         this.createFoodBar();
+
+        // Create power-up UI buttons (mask and book)
+        this.createPowerUpButtons();
 
         // Add input listener for farm interaction
         this.farmPopup = new FarmPopup(this);
@@ -848,6 +928,90 @@ export class MainGameScene extends Phaser.Scene {
 
         window.addEventListener("bookToggled", handleBookToggled);
 
+        // Listen for spawned elements from other player
+        const handleSpawnElements = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { elements } = customEvent.detail;
+
+            // Elements are already spawned by both players independently
+            // This is just a sync notification
+            console.log(`📦 Synced ${elements.length} elements`);
+        };
+
+        window.addEventListener("spawnElements", handleSpawnElements);
+
+        // Listen for element pickup events
+        const handleElementPickup = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { playerNumber, elementId, elementType } = customEvent.detail;
+
+            if (playerNumber !== this.playerNumber) {
+                const element = this.spawnableElements.get(elementId);
+                if (element) {
+                    this.spawnableElements.delete(elementId);
+                    element.destroy();
+
+                    // Update remote player's counts
+                    if (elementType === "food") {
+                        const currentFood =
+                            this.playerFood.get(playerNumber) || 0;
+                        this.playerFood.set(playerNumber, currentFood + 1);
+                        this.playerTotalFood.set(playerNumber, currentFood + 1);
+                    } else if (elementType === "mask") {
+                        const currentMask =
+                            this.playerMaskCount.get(playerNumber) || 0;
+                        if (currentMask < 5) {
+                            this.playerMaskCount.set(
+                                playerNumber,
+                                currentMask + 1,
+                            );
+                        }
+                    } else if (elementType === "book") {
+                        const currentBook =
+                            this.playerBookCount.get(playerNumber) || 0;
+                        if (currentBook < 5) {
+                            this.playerBookCount.set(
+                                playerNumber,
+                                currentBook + 1,
+                            );
+                        }
+                    }
+                }
+            }
+        };
+
+        window.addEventListener("elementPickup", handleElementPickup);
+
+        // Listen for mask activation
+        const handleMaskActivated = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { playerNumber } = customEvent.detail;
+
+            console.log(`🎭 Mask activated for player ${playerNumber}`);
+        };
+
+        window.addEventListener("maskActivated", handleMaskActivated);
+
+        // Listen for mask expiration
+        const handleMaskExpired = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { playerNumber } = customEvent.detail;
+
+            console.log(`⏰ Mask expired for player ${playerNumber}`);
+        };
+
+        window.addEventListener("maskExpired", handleMaskExpired);
+
+        // Listen for book activation
+        const handleBookActivated = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { playerNumber } = customEvent.detail;
+
+            console.log(`📖 Book activated for player ${playerNumber}`);
+        };
+
+        window.addEventListener("bookActivated", handleBookActivated);
+
         // Player 1 spawns the initial 20 enemies
         if (this.playerNumber === 1) {
             // Spawn after a short delay to ensure everything is set up
@@ -879,6 +1043,11 @@ export class MainGameScene extends Phaser.Scene {
             window.removeEventListener("gameStateSync", handleGameStateSync);
             window.removeEventListener("maskToggled", handleMaskToggled);
             window.removeEventListener("bookToggled", handleBookToggled);
+            window.removeEventListener("spawnElements", handleSpawnElements);
+            window.removeEventListener("elementPickup", handleElementPickup);
+            window.removeEventListener("maskActivated", handleMaskActivated);
+            window.removeEventListener("maskExpired", handleMaskExpired);
+            window.removeEventListener("bookActivated", handleBookActivated);
         });
 
         EventBus.emit("current-scene-ready-3", this);
@@ -941,6 +1110,21 @@ export class MainGameScene extends Phaser.Scene {
 
         const foodAfterProduction = this.playerFood.get(this.playerNumber) || 0;
         const foodChanged = foodAfterProduction !== foodBefore;
+
+        // Update spawnable elements
+        this.spawnableElements.forEach((element) => {
+            element.update();
+        });
+
+        // Spawn random elements every 3-6 seconds (only player 1 spawns to sync)
+        if (this.playerNumber === 1) {
+            this.elementSpawnTimer += dt;
+            if (this.elementSpawnTimer >= this.elementSpawnInterval) {
+                this.elementSpawnTimer = 0;
+                this.elementSpawnInterval = Phaser.Math.Between(3000, 6000);
+                this.spawnRandomElement();
+            }
+        }
 
         // Food consumption system (local player only)
         let foodConsumptionHappened = false;
@@ -1571,6 +1755,151 @@ export class MainGameScene extends Phaser.Scene {
         });
     }
 
+    private createPowerUpButtons() {
+        const gridSize = 40;
+        const buttonSize = 30;
+        const padding = 10;
+
+        // Mask button (left side, bottom right)
+        const maskButtonX = 12 * gridSize + padding;
+        const maskButtonY = this.scale.height - 2 * gridSize + padding;
+
+        const maskButton = this.add.rectangle(
+            maskButtonX,
+            maskButtonY,
+            buttonSize,
+            buttonSize,
+            0x9932cc,
+            0.8,
+        );
+        maskButton.setStrokeStyle(2, 0xffffff);
+        maskButton.setInteractive({ cursor: "pointer" });
+        maskButton.setDepth(1001);
+
+        const maskText = this.add.text(maskButtonX, maskButtonY, "M", {
+            fontSize: "16px",
+            fontFamily: "Arial",
+            color: "#ffffff",
+            fontStyle: "bold",
+        });
+        maskText.setOrigin(0.5, 0.5);
+        maskText.setDepth(1002);
+
+        const maskCountText = this.add.text(
+            maskButtonX + 12,
+            maskButtonY - 12,
+            "0",
+            {
+                fontSize: "10px",
+                fontFamily: "Arial",
+                color: "#ffffff",
+                fontStyle: "bold",
+                stroke: "#000000",
+                strokeThickness: 1,
+            },
+        );
+        maskCountText.setOrigin(0.5, 0.5);
+        maskCountText.setDepth(1002);
+
+        maskButton.on("pointerover", () => {
+            maskButton.setFillStyle(0xb850d0, 1);
+            maskButton.setScale(1.1);
+        });
+
+        maskButton.on("pointerout", () => {
+            maskButton.setFillStyle(0x9932cc, 0.8);
+            maskButton.setScale(1);
+        });
+
+        maskButton.on("pointerdown", () => {
+            if (this.getMaskCount() >= 5) {
+                this.activateMask();
+                maskCountText.setText("0");
+            }
+        });
+
+        // Book button (right side, bottom left)
+        const bookButtonX = this.scale.width - 12 * gridSize - padding;
+        const bookButtonY = this.scale.height - 2 * gridSize + padding;
+
+        const bookButton = this.add.rectangle(
+            bookButtonX,
+            bookButtonY,
+            buttonSize,
+            buttonSize,
+            0x00aaff,
+            0.8,
+        );
+        bookButton.setStrokeStyle(2, 0xffffff);
+        bookButton.setInteractive({ cursor: "pointer" });
+        bookButton.setDepth(1001);
+
+        const bookText = this.add.text(bookButtonX, bookButtonY, "B", {
+            fontSize: "16px",
+            fontFamily: "Arial",
+            color: "#ffffff",
+            fontStyle: "bold",
+        });
+        bookText.setOrigin(0.5, 0.5);
+        bookText.setDepth(1002);
+
+        const bookCountText = this.add.text(
+            bookButtonX - 12,
+            bookButtonY - 12,
+            "0",
+            {
+                fontSize: "10px",
+                fontFamily: "Arial",
+                color: "#ffffff",
+                fontStyle: "bold",
+                stroke: "#000000",
+                strokeThickness: 1,
+            },
+        );
+        bookCountText.setOrigin(0.5, 0.5);
+        bookCountText.setDepth(1002);
+
+        bookButton.on("pointerover", () => {
+            bookButton.setFillStyle(0x0088dd, 1);
+            bookButton.setScale(1.1);
+        });
+
+        bookButton.on("pointerout", () => {
+            bookButton.setFillStyle(0x00aaff, 0.8);
+            bookButton.setScale(1);
+        });
+
+        bookButton.on("pointerdown", () => {
+            if (this.getBookCount() >= 5) {
+                this.activateBook();
+                bookCountText.setText("0");
+            }
+        });
+
+        // Update count texts every frame (attach to update)
+        this.events.on("update", () => {
+            maskCountText.setText(String(this.getMaskCount()));
+            bookCountText.setText(String(this.getBookCount()));
+
+            // Change button color based on activation state
+            if (this.isMaskActive()) {
+                maskButton.setFillStyle(0x00ff00, 0.8);
+            } else if (this.getMaskCount() >= 5) {
+                maskButton.setFillStyle(0xffff00, 0.8);
+            } else {
+                maskButton.setFillStyle(0x9932cc, 0.8);
+            }
+
+            if (this.hasBookPermission()) {
+                bookButton.setFillStyle(0x00ff00, 0.8);
+            } else if (this.getBookCount() >= 5) {
+                bookButton.setFillStyle(0xffff00, 0.8);
+            } else {
+                bookButton.setFillStyle(0x00aaff, 0.8);
+            }
+        });
+    }
+
     private updateFoodBar() {
         // Update food bars for both players
         [1, 2].forEach((playerNum) => {
@@ -2082,6 +2411,360 @@ export class MainGameScene extends Phaser.Scene {
                 return true;
             }
         }
+        return false;
+    }
+
+    private spawnRandomElement() {
+        const elementTypes: ElementType[] = ["food", "mask", "book"];
+
+        // For each element type, decide which players should get it
+        elementTypes.forEach((type) => {
+            [1, 2].forEach((playerNum) => {
+                // Check if this player should get this element
+                let shouldSpawn = true;
+
+                if (type === "mask") {
+                    const maskCount = this.playerMaskCount.get(playerNum) || 0;
+                    shouldSpawn = maskCount < 5;
+                } else if (type === "book") {
+                    const bookCount = this.playerBookCount.get(playerNum) || 0;
+                    shouldSpawn = bookCount < 5;
+                }
+
+                if (shouldSpawn) {
+                    this.spawnElementForPlayer(playerNum, type);
+                }
+            });
+        });
+
+        // Broadcast to both players that elements were spawned
+        if (this.networkManager) {
+            this.networkManager.sendAction("spawn_elements", {
+                elements: Array.from(this.spawnableElements.values()).map(
+                    (el) => ({
+                        id: el.getElementId(),
+                        type: el.getElementType(),
+                        x: el.x,
+                        y: el.y,
+                    }),
+                ),
+            });
+        }
+    }
+
+    private isSpawnPositionValid(x: number, y: number): boolean {
+        const elementSize = 30; // Half-width of element for collision
+        const elementBounds = new Phaser.Geom.Rectangle(
+            x - elementSize,
+            y - elementSize,
+            elementSize * 2,
+            elementSize * 2,
+        );
+
+        // Check collision with towers
+        for (const tower of this.towers.values()) {
+            const towerBounds = new Phaser.Geom.Rectangle(
+                tower.x,
+                tower.y,
+                40,
+                80,
+            );
+            if (Phaser.Geom.Rectangle.Overlaps(elementBounds, towerBounds)) {
+                return false;
+            }
+        }
+
+        // Check collision with trap towers
+        for (const trapTower of this.trapTowers.values()) {
+            const trapBounds = new Phaser.Geom.Rectangle(
+                trapTower.x,
+                trapTower.y,
+                40,
+                40,
+            );
+            if (Phaser.Geom.Rectangle.Overlaps(elementBounds, trapBounds)) {
+                return false;
+            }
+        }
+
+        // Check collision with farms
+        for (const farm of this.farms.values()) {
+            const farmBounds = new Phaser.Geom.Rectangle(
+                farm.x,
+                farm.y,
+                40,
+                40,
+            );
+            if (Phaser.Geom.Rectangle.Overlaps(elementBounds, farmBounds)) {
+                return false;
+            }
+        }
+
+        // Check collision with existing spawnable elements
+        for (const element of this.spawnableElements.values()) {
+            const elementElBounds = new Phaser.Geom.Rectangle(
+                element.x - elementSize,
+                element.y - elementSize,
+                elementSize * 2,
+                elementSize * 2,
+            );
+            if (
+                Phaser.Geom.Rectangle.Overlaps(elementBounds, elementElBounds)
+            ) {
+                return false;
+            }
+        }
+
+        // Check collision with characters
+        for (const char of this.characters.values()) {
+            const charBounds = new Phaser.Geom.Rectangle(
+                char.x - 20,
+                char.y - 40,
+                40,
+                80,
+            );
+            if (Phaser.Geom.Rectangle.Overlaps(elementBounds, charBounds)) {
+                return false;
+            }
+        }
+
+        // Check if position is in menu area (bottom 5 rows = 200px)
+        const gridSize = 40;
+        const sideMenuHeight = 5 * gridSize;
+        const menuAreaStartY = this.scale.height - sideMenuHeight;
+
+        if (y + elementSize >= menuAreaStartY) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private spawnElementForPlayer(
+        playerNumber: number,
+        elementType: ElementType,
+    ) {
+        const gridSize = 40;
+        const midX = this.scale.width / 2;
+        let x: number, y: number;
+        let attempts = 0;
+        const maxAttempts = 10; // Try up to 10 times to find a valid spawn position
+
+        // Keep trying to find a valid spawn position
+        do {
+            // Determine spawn area based on player side
+            if (playerNumber === 1) {
+                // Left side (player 1): columns 1-10 (avoid column 0 and 11-12 middle area)
+                const gridX = Phaser.Math.Between(1, 10) * gridSize;
+                const gridY = Phaser.Math.Between(2, 15) * gridSize;
+                x = gridX;
+                y = gridY;
+            } else {
+                // Right side (player 2): columns 21-30 (avoid column 31 and 19-20 middle area)
+                const gridX = Phaser.Math.Between(21, 30) * gridSize;
+                const gridY = Phaser.Math.Between(2, 15) * gridSize;
+                x = gridX;
+                y = gridY;
+            }
+
+            attempts++;
+        } while (!this.isSpawnPositionValid(x, y) && attempts < maxAttempts);
+
+        // If no valid position found after max attempts, abort spawn
+        if (attempts >= maxAttempts) {
+            console.log(
+                `⚠️ Could not find valid spawn position for ${elementType} after ${maxAttempts} attempts`,
+            );
+            return;
+        }
+
+        const elementId = `element-${elementType}-${Date.now()}-${playerNumber}`;
+        const element = new SpawnableElement({
+            scene: this,
+            x,
+            y,
+            elementType,
+            elementId,
+        });
+
+        this.spawnableElements.set(elementId, element);
+
+        // Set up collision with character
+        const char = this.characters.get(playerNumber);
+        if (char) {
+            this.physics.add.overlap(char, element, () => {
+                this.onElementPickup(playerNumber, elementId, elementType);
+            });
+        }
+    }
+
+    private onElementPickup(
+        playerNumber: number,
+        elementId: string,
+        elementType: ElementType,
+    ) {
+        const element = this.spawnableElements.get(elementId);
+        if (!element) return;
+
+        console.log(`🎁 Player ${playerNumber} picked up ${elementType}`);
+
+        let text = "";
+        let color = 0xffffff;
+
+        if (elementType === "food") {
+            const currentFood = this.playerFood.get(playerNumber) || 0;
+            this.playerFood.set(playerNumber, currentFood + 1);
+            this.playerTotalFood.set(playerNumber, currentFood + 1);
+            text = "+1 Food";
+            color = 0xff8800;
+        } else if (elementType === "mask") {
+            const currentMask = this.playerMaskCount.get(playerNumber) || 0;
+            if (currentMask < 5) {
+                this.playerMaskCount.set(playerNumber, currentMask + 1);
+                text = "+1 Mask";
+                color = 0x9932cc;
+            }
+        } else if (elementType === "book") {
+            const currentBook = this.playerBookCount.get(playerNumber) || 0;
+            if (currentBook < 5) {
+                this.playerBookCount.set(playerNumber, currentBook + 1);
+                text = "+1 Book";
+                color = 0x00aaff;
+            }
+        }
+
+        // Show floating text at element position
+        if (text) {
+            this.showFloatingPickupText(element.x, element.y, text, color);
+        }
+
+        // Remove element from map
+        this.spawnableElements.delete(elementId);
+        element.destroy();
+
+        // Broadcast pickup to other player
+        if (this.networkManager && playerNumber === this.playerNumber) {
+            this.networkManager.sendAction("element_pickup", {
+                playerNumber,
+                elementId,
+                elementType,
+            });
+        }
+    }
+
+    private showFloatingPickupText(
+        x: number,
+        y: number,
+        text: string,
+        color: number,
+    ) {
+        const floatingText = this.add.text(x, y - 20, text, {
+            fontSize: "16px",
+            fontFamily: "Arial",
+            color: "#" + color.toString(16).padStart(6, "0"),
+            fontStyle: "bold",
+            stroke: "#000000",
+            strokeThickness: 2,
+        });
+        floatingText.setOrigin(0.5, 0.5);
+        floatingText.setDepth(1000);
+
+        // Animate text upward and fade out
+        this.tweens.add({
+            targets: floatingText,
+            y: y - 60,
+            alpha: 0,
+            duration: 1000,
+            ease: "Power2",
+            onComplete: () => {
+                floatingText.destroy();
+            },
+        });
+    }
+
+    getMaskCount(): number {
+        return this.playerMaskCount.get(this.playerNumber) || 0;
+    }
+
+    getBookCount(): number {
+        return this.playerBookCount.get(this.playerNumber) || 0;
+    }
+
+    activateMask(): void {
+        if (this.getMaskCount() < 5) return;
+
+        this.maskActivated = true;
+        this.playerMaskCount.set(this.playerNumber, 0);
+
+        console.log(`🎭 Mask activated for player ${this.playerNumber}`);
+
+        // Start 20-second timer
+        if (this.maskTimerExpired) {
+            this.maskTimerExpired.remove();
+        }
+
+        this.maskTimerExpired = this.time.delayedCall(20000, () => {
+            this.maskActivated = false;
+            const char = this.characters.get(this.playerNumber);
+            if (char) {
+                // Teleport to city target
+                const targetPos =
+                    this.playerNumber === 1
+                        ? { x: 0, y: 120 }
+                        : { x: 1200, y: 120 };
+                char.setPosition(targetPos.x, targetPos.y);
+                char.updateRemotePosition(targetPos.x, targetPos.y);
+            }
+
+            console.log(
+                `⏰ Mask timer expired for player ${this.playerNumber}`,
+            );
+
+            // Broadcast mask expiration
+            if (this.networkManager) {
+                this.networkManager.sendAction("mask_expired", {
+                    playerNumber: this.playerNumber,
+                });
+            }
+        });
+
+        // Broadcast mask activation
+        if (this.networkManager) {
+            this.networkManager.sendAction("mask_activated", {
+                playerNumber: this.playerNumber,
+            });
+        }
+    }
+
+    isMaskActive(): boolean {
+        return this.maskActivated;
+    }
+
+    activateBook(): void {
+        if (this.getBookCount() < 5) return;
+
+        this.hasBookAccess = true;
+        this.playerBookCount.set(this.playerNumber, 0);
+
+        console.log(`📖 Book activated for player ${this.playerNumber}`);
+
+        // Books give permanent access to common target area (until game ends)
+        // Broadcast book activation
+        if (this.networkManager) {
+            this.networkManager.sendAction("book_activated", {
+                playerNumber: this.playerNumber,
+            });
+        }
+    }
+
+    hasBookPermission(): boolean {
+        return this.hasBookAccess;
+    }
+
+    isInCommonTargetAreaAllowed(x: number, y: number): boolean {
+        if (this.hasBookAccess) return true;
+
+        // Default: only accessible with book
         return false;
     }
 }

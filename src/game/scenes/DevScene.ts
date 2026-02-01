@@ -164,10 +164,10 @@ export class DevScene extends Phaser.Scene {
         // Create farms
         const targetSize = 160;
         const targetColors = [0xff0000, 0x0000ff, 0xffff00, 0x00ff00];
-        const targetLeftXGrid = [11, 17, 11, 17];
-        const targetLeftYGrid = [4, 4, 12, 12];
-        const targetRightXGrid = [32, 38, 32, 38];
-        const targetRightYGrid = [4, 4, 12, 12];
+        const targetLeftXGrid = [6, 10, 6, 10];
+        const targetLeftYGrid = [1, 1, 7, 7];
+        const targetRightXGrid = [23, 19, 23, 19];
+        const targetRightYGrid = [1, 1, 7, 7];
         const farmTypes: Array<"wheat" | "carrot" | "sunflower" | "potato"> = [
             "wheat",
             "carrot",
@@ -209,11 +209,10 @@ export class DevScene extends Phaser.Scene {
             this.farms.set(farm.farmId, farm);
         });
 
-        // Create common target area at bottom center (12x6 grid cells = 480x240px)
-        const gridSize = 40;
-        const commonTargetWidth = 12 * gridSize; // 480px
-        const commonTargetHeight = 6 * gridSize; // 240px
-        const commonTargetX = midX; // Center at middle
+        // Create common target area at bottom center (8x5 grid cells = 320x200px)
+        const commonTargetWidth = 8 * gridSize; // 320px
+        const commonTargetHeight = 5 * gridSize; // 200px
+        const commonTargetX = midX - gridSize; // Shift left by 1 tile
         const commonTargetY = this.scale.height - commonTargetHeight / 2; // Bottom
 
         this.add
@@ -229,11 +228,9 @@ export class DevScene extends Phaser.Scene {
             .setDepth(0);
 
         // Draw menu areas (restricted movement zones)
-        const leftMenuWidth = 19 * gridSize; // 760px (19 columns)
-        const rightMenuWidth = 19 * gridSize; // 760px (19 columns)
-        const sideMenuHeight = 7 * gridSize; // 280px (7 rows from bottom)
-        const bottomMenuHeight = 2 * gridSize; // 80px (2 rows)
-        const bottomMenuWidth = 20 * gridSize; // 800px (20 columns from 6 to 26)
+        const leftMenuWidth = 12 * gridSize; // 480px (12 columns)
+        const rightMenuWidth = 12 * gridSize; // 480px (12 columns)
+        const sideMenuHeight = 5 * gridSize; // 200px (5 rows from bottom)
 
         // Left menu area (bottom-left corner)
         this.add
@@ -261,18 +258,37 @@ export class DevScene extends Phaser.Scene {
             .setStrokeStyle(2, 0x666666, 0.8)
             .setDepth(0);
 
-        // Bottom menu area (centered, 19 columns wide, 2 rows)
-        this.add
-            .rectangle(
-                midX,
-                this.scale.height - bottomMenuHeight / 2,
-                bottomMenuWidth,
-                bottomMenuHeight,
-                0x222222,
-                0.6,
-            )
-            .setStrokeStyle(2, 0x666666, 0.8)
-            .setDepth(0);
+        // Define restricted zones (match MainGameScene)
+        const restrictedZones = [
+            {
+                rows: [5],
+                columns: Array.from({ length: 11 }, (_, i) => i + 4).concat(
+                    Array.from({ length: 11 }, (_, i) => i + 17),
+                ),
+            },
+            {
+                rows: Array.from({ length: 4 }, (_, i) => i + 6),
+                columns: [14, 17],
+            },
+        ];
+
+        restrictedZones.forEach((zone) => {
+            zone.rows.forEach((row) => {
+                zone.columns.forEach((col) => {
+                    this.add
+                        .rectangle(
+                            col * gridSize + gridSize / 2,
+                            row * gridSize + gridSize / 2,
+                            gridSize,
+                            gridSize,
+                            0xff0000,
+                            0.3,
+                        )
+                        .setStrokeStyle(2, 0xff0000, 0.8)
+                        .setDepth(0);
+                });
+            });
+        });
 
         // Create food bar UI at top
         this.createFoodBar();
@@ -749,9 +765,11 @@ export class DevScene extends Phaser.Scene {
 
     private isInCommonTargetArea(x: number, y: number): boolean {
         const midX = this.scale.width / 2;
-        const commonTargetMinY = this.scale.height - 240; // last 6 rows
-        const commonTargetMinX = midX - 240;
-        const commonTargetMaxX = midX + 240;
+        const commonTargetWidth = 8 * 40;
+        const commonTargetHeight = 5 * 40;
+        const commonTargetMinY = this.scale.height - commonTargetHeight; // last 5 rows
+        const commonTargetMinX = midX - commonTargetWidth / 2 - 40; // shift left by 1 tile
+        const commonTargetMaxX = midX + commonTargetWidth / 2 - 40;
 
         return (
             y >= commonTargetMinY &&

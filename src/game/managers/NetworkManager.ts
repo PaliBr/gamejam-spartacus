@@ -51,6 +51,10 @@ export class NetworkManager {
             "enemies_killed_batch",
             "toggle_book",
             "food_gold_sync",
+            "farm_upgrade",
+            "tower_upgrade",
+            "trap_upgrade",
+            "game_state_sync",
         ];
 
         console.log(`📡 Broadcasting action...`);
@@ -121,11 +125,17 @@ export class NetworkManager {
                 }
                 break;
             case "build_tower":
-                gameScene.buildTower(
-                    action.player_id,
-                    action.action_data.towerType,
-                    action.action_data.x,
-                    action.action_data.y,
+                // Emit event for tower building
+                window.dispatchEvent(
+                    new CustomEvent("towerBuilt", {
+                        detail: {
+                            towerId: action.action_data.towerId,
+                            x: action.action_data.x,
+                            y: action.action_data.y,
+                            playerNumber: action.action_data.playerNumber,
+                            gold: action.action_data.gold,
+                        },
+                    }),
                 );
                 break;
             case "build_trap":
@@ -154,6 +164,54 @@ export class NetworkManager {
                     }),
                 );
                 break;
+            case "farm_upgrade":
+                // Emit event for farm upgrade
+                window.dispatchEvent(
+                    new CustomEvent("farmUpgrade", {
+                        detail: {
+                            farmId: action.action_data.farmId,
+                            level: action.action_data.level,
+                            playerNumber: action.action_data.playerNumber,
+                            gold: action.action_data.gold,
+                        },
+                    }),
+                );
+                break;
+            case "tower_upgrade":
+                // Emit event for tower upgrade
+                window.dispatchEvent(
+                    new CustomEvent("towerUpgrade", {
+                        detail: {
+                            towerId: action.action_data.towerId,
+                            level: action.action_data.level,
+                            playerNumber: action.action_data.playerNumber,
+                            gold: action.action_data.gold,
+                        },
+                    }),
+                );
+                break;
+            case "trap_upgrade":
+                // Emit event for trap tower upgrade
+                window.dispatchEvent(
+                    new CustomEvent("trapUpgrade", {
+                        detail: {
+                            trapId: action.action_data.trapId,
+                            level: action.action_data.level,
+                            playerNumber: action.action_data.playerNumber,
+                            gold: action.action_data.gold,
+                        },
+                    }),
+                );
+                break;
+            case "game_state_sync":
+                // Emit event for full game state sync
+                window.dispatchEvent(
+                    new CustomEvent("gameStateSync", {
+                        detail: action.action_data,
+                    }),
+                );
+                break;
         }
     }
 }
+

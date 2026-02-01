@@ -14,20 +14,12 @@ const isDev = import.meta.env.VITE_ENV === "dev";
 
 const config: Phaser.Types.Core.GameConfig = {
     scale: {
-        mode: Phaser.Scale.EXPAND,
+        mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: 1280,
         height: 720,
-        min: {
-            width: 640,
-            height: 360,
-        },
-        max: {
-            width: 1920,
-            height: 1080,
-        },
         fullscreenTarget: "parent",
-        expandParent: true,
+        expandParent: false,
     },
     parent: "game-container",
     backgroundColor: "#028af8",

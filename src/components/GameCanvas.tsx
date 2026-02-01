@@ -80,8 +80,8 @@ export function GameCanvas({
         const config: Phaser.Types.Core.GameConfig = {
             type: Phaser.AUTO,
             parent: "phaser-container",
-            width: 1920,
-            height: 1080,
+            width: 1280,
+            height: 720,
             backgroundColor: "#1a1a2e",
             scene: [MainGameScene],
             physics: {
@@ -237,6 +237,55 @@ export function GameCanvas({
                             },
                         }),
                     );
+                } else if (payload.action_type === "farm_upgrade") {
+                    window.dispatchEvent(
+                        new CustomEvent("farmUpgrade", {
+                            detail: {
+                                farmId: payload.action_data.farmId,
+                                level: payload.action_data.level,
+                                playerNumber: payload.action_data.playerNumber,
+                                gold: payload.action_data.gold,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "tower_upgrade") {
+                    window.dispatchEvent(
+                        new CustomEvent("towerUpgrade", {
+                            detail: {
+                                towerId: payload.action_data.towerId,
+                                level: payload.action_data.level,
+                                playerNumber: payload.action_data.playerNumber,
+                                gold: payload.action_data.gold,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "trap_upgrade") {
+                    window.dispatchEvent(
+                        new CustomEvent("trapUpgrade", {
+                            detail: {
+                                trapId: payload.action_data.trapId,
+                                level: payload.action_data.level,
+                                playerNumber: payload.action_data.playerNumber,
+                                gold: payload.action_data.gold,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "game_state_sync") {
+                    window.dispatchEvent(
+                        new CustomEvent("gameStateSync", {
+                            detail: payload.action_data,
+                        }),
+                    );
+                } else if (payload.action_type === "enemy_trapped") {
+                    window.dispatchEvent(
+                        new CustomEvent("enemyTrapped", {
+                            detail: {
+                                enemyId: payload.action_data.enemyId,
+                                trapX: payload.action_data.trapX,
+                                trapY: payload.action_data.trapY,
+                            },
+                        }),
+                    );
                 }
             }
         });
@@ -367,9 +416,6 @@ export function GameCanvas({
                                     : "bg-red-500"
                             }`}
                         />
-                        <span className="text-white font-semibold">
-                            {connected ? "Connected" : "Disconnected"}
-                        </span>
                     </div>
                 </div>
 

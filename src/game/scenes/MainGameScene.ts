@@ -6,6 +6,7 @@ import { Tower } from "../objects/Tower";
 import { TrapTower } from "../objects/TrapTower";
 import { Farm } from "../objects/Farm";
 import { FarmPopup } from "../objects/FarmPopup";
+import { TowerPopup } from "../objects/TowerPopup";
 import { TowerSelectionPopup } from "../objects/TowerSelectionPopup";
 import { NetworkManager } from "../managers/NetworkManager";
 
@@ -25,6 +26,7 @@ export class MainGameScene extends Phaser.Scene {
     trapTowers: Map<string, TrapTower> = new Map();
     farms: Map<string, Farm> = new Map();
     farmPopup: FarmPopup | null = null;
+    towerPopup: TowerPopup | null = null;
     towerSelectionPopup: TowerSelectionPopup | null = null;
     networkManager: NetworkManager | null = null;
     playerId: string = "";
@@ -63,6 +65,10 @@ export class MainGameScene extends Phaser.Scene {
     goldTexts: Map<number, Phaser.GameObjects.Text> = new Map();
     // Gold production timer (same as consumption)
     private goldProductionTimers: Map<number, number> = new Map([
+        [1, 0],
+        [2, 0],
+    ]);
+    private cityTargetHitCount: Map<number, number> = new Map([
         [1, 0],
         [2, 0],
     ]);
@@ -248,11 +254,11 @@ export class MainGameScene extends Phaser.Scene {
         // Left side: 4x4 grid, aligned to 40px grid
         // Using grid coordinates (each grid cell = 40px)
         // 1280x720 = 32 columns × 18 rows
-        const targetLeftXGrid = [9, 15, 9, 15]; // Grid positions from left
-        const targetLeftYGrid = [3, 3, 10, 10]; // Grid positions from top
+        const targetLeftXGrid = [6, 10, 6, 10]; // Grid positions from left
+        const targetLeftYGrid = [1, 1, 7, 7]; // Grid positions from top
         // Right side: mirrored
-        const targetRightXGrid = [30, 36, 30, 36]; // Grid positions from left (32 columns)
-        const targetRightYGrid = [3, 3, 10, 10]; // Grid positions from top
+        const targetRightXGrid = [23, 19, 23, 19]; // Grid positions from left (32 columns, mirrored)
+        const targetRightYGrid = [1, 1, 7, 7]; // Grid positions from top
 
         // Create farms on left side
         // Wheat (yellow), Carrot (red), Sunflower (blue), Potato (green)
@@ -307,13 +313,53 @@ export class MainGameScene extends Phaser.Scene {
                 .setDepth(1);
         });
 
-        // Create common target area at bottom center (12x6 grid cells = 480x240px)
-        // Centered: 6 tiles left and 6 tiles right from middle (tiles 10-22)
-        // Bottom: last 6 rows (rows 12-17 in 0-indexed, y from 480 to 720)
-        const commonTargetWidth = 12 * gridSize; // 480px
-        const commonTargetHeight = 6 * gridSize; // 240px
-        const commonTargetX = midX; // Center at middle
-        const commonTargetY = this.scale.height - commonTargetHeight / 2; // Bottom, centered vertically in the 6 rows
+        // Create cityTarget areas (4x4 grid squares = 160x160px)
+        // Left side: row 7, column 3 from left edge (column 3)
+        // Right side: row 7, column 3 from right edge (mirrored)
+        const cityTargetSize = 4 * gridSize; // 160px (4x4 grid)
+        const cityTargetRow = 3; // Row 7
+        const cityTargetColFromEdge = 0; // 3 columns from edge
+
+        // Left city target (player 1)
+        const leftCityX = cityTargetColFromEdge * gridSize;
+        const leftCityY = cityTargetRow * gridSize;
+        this.add
+            .rectangle(
+                leftCityX,
+                leftCityY,
+                cityTargetSize,
+                cityTargetSize,
+                0x888888,
+                0.4,
+            )
+            .setOrigin(0, 0)
+            .setStrokeStyle(3, 0xaaaaaa, 1)
+            .setDepth(0);
+
+        // Right city target (player 2) - mirrored position
+        // 160px from right edge: (1280 - 160) / 40 = 28
+        const rightCityX = 28 * gridSize;
+        const rightCityY = cityTargetRow * gridSize;
+        this.add
+            .rectangle(
+                rightCityX,
+                rightCityY,
+                cityTargetSize,
+                cityTargetSize,
+                0x888888,
+                0.4,
+            )
+            .setOrigin(0, 0)
+            .setStrokeStyle(3, 0xaaaaaa, 1)
+            .setDepth(0);
+
+        // Create common target area at bottom center (8x5 grid cells = 320x200px)
+        // Shifted 1 tile left: 4 tiles left and 4 tiles right from middle (tiles 11-18)
+        // Bottom: last 5 rows (rows 13-17 in 0-indexed, y from 520 to 720)
+        const commonTargetWidth = 8 * gridSize; // 320px
+        const commonTargetHeight = 5 * gridSize; // 200px
+        const commonTargetX = midX - gridSize; // Shift left by 1 tile
+        const commonTargetY = this.scale.height - commonTargetHeight / 2; // Bottom, centered vertically in the 5 rows
 
         this.add
             .rectangle(
@@ -327,12 +373,9 @@ export class MainGameScene extends Phaser.Scene {
             .setStrokeStyle(3, 0xff8800, 1)
             .setDepth(0);
 
-        // Draw menu areas (restricted movement zones)
-        const leftMenuWidth = 19 * gridSize; // 760px (19 columns)
-        const rightMenuWidth = 19 * gridSize; // 760px (19 columns)
-        const sideMenuHeight = 7 * gridSize; // 280px (7 rows from bottom)
-        const bottomMenuHeight = 2 * gridSize; // 80px (2 rows)
-        const bottomMenuWidth = 20 * gridSize; // 800px (20 columns from 6 to 26)
+        const leftMenuWidth = 12 * gridSize;
+        const rightMenuWidth = 12 * gridSize;
+        const sideMenuHeight = 5 * gridSize;
 
         // Left menu area (bottom-left corner)
         this.add
@@ -360,30 +403,17 @@ export class MainGameScene extends Phaser.Scene {
             .setStrokeStyle(2, 0x666666, 0.8)
             .setDepth(0);
 
-        // Bottom menu area (centered, 19 columns wide, 2 rows)
-        this.add
-            .rectangle(
-                midX,
-                this.scale.height - bottomMenuHeight / 2,
-                bottomMenuWidth,
-                bottomMenuHeight,
-                0x222222,
-                0.6,
-            )
-            .setStrokeStyle(2, 0x666666, 0.8)
-            .setDepth(0);
-
         // Define restricted zones
         const restrictedZones = [
             {
-                rows: [6, 7, 8, 9],
-                columns: Array.from({ length: 17 }, (_, i) => i + 6).concat(
-                    Array.from({ length: 17 }, (_, i) => i + 25),
-                ), // Columns 6-22 and 25-42
+                rows: [5],
+                columns: Array.from({ length: 11 }, (_, i) => i + 4).concat(
+                    Array.from({ length: 11 }, (_, i) => i + 17),
+                ), // Columns 4-13 and 16-21
             },
             {
-                rows: Array.from({ length: 13 }, (_, i) => i + 8), // Rows 8-20
-                columns: [20, 21, 22, 25, 26, 27],
+                rows: Array.from({ length: 7 }, (_, i) => i + 6),
+                columns: [14, 17],
             },
         ];
 
@@ -411,6 +441,7 @@ export class MainGameScene extends Phaser.Scene {
 
         // Add input listener for farm interaction
         this.farmPopup = new FarmPopup(this);
+        this.towerPopup = new TowerPopup(this);
         this.towerSelectionPopup = new TowerSelectionPopup(this);
 
         this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -426,6 +457,12 @@ export class MainGameScene extends Phaser.Scene {
             // Close farm popup if clicking outside
             if (this.farmPopup && this.farmPopup.isActive()) {
                 this.farmPopup.hide();
+                return;
+            }
+
+            // Close tower popup if clicking outside
+            if (this.towerPopup && this.towerPopup.isActive()) {
+                this.towerPopup.hide();
                 return;
             }
 
@@ -455,6 +492,39 @@ export class MainGameScene extends Phaser.Scene {
                     }
                 }
             });
+
+            // Check if clicking on a tower or trap tower
+            if (!handled) {
+                this.towers.forEach((tower) => {
+                    // Tower is 1x2 (40x80), origin at 0,0
+                    const isInTower =
+                        pointer.worldX >= tower.x &&
+                        pointer.worldX <= tower.x + 40 &&
+                        pointer.worldY >= tower.y &&
+                        pointer.worldY <= tower.y + 80;
+
+                    if (isInTower) {
+                        this.towerPopup!.show(tower);
+                        handled = true;
+                    }
+                });
+            }
+
+            if (!handled) {
+                this.trapTowers.forEach((trapTower) => {
+                    // Trap tower is 1x1 (40x40), origin at 0.5,0.5 (centered)
+                    const isInTrap =
+                        pointer.worldX >= trapTower.x - 20 &&
+                        pointer.worldX <= trapTower.x + 20 &&
+                        pointer.worldY >= trapTower.y - 20 &&
+                        pointer.worldY <= trapTower.y + 20;
+
+                    if (isInTrap) {
+                        this.towerPopup!.show(trapTower);
+                        handled = true;
+                    }
+                });
+            }
 
             if (!handled) {
                 this.showTowerSelectionMenu(pointer);
@@ -556,7 +626,7 @@ export class MainGameScene extends Phaser.Scene {
         // Listen for tower building events
         const handleTowerBuilt = (event: Event) => {
             const customEvent = event as CustomEvent;
-            const { towerId, x, y, playerNumber } = customEvent.detail;
+            const { towerId, x, y, playerNumber, gold } = customEvent.detail;
             console.log(`🏗️ Remote tower built at (${x}, ${y})`);
             if (this.towers.has(towerId)) {
                 return;
@@ -570,6 +640,15 @@ export class MainGameScene extends Phaser.Scene {
                 networkManager: this.networkManager,
             });
             this.towers.set(towerId, tower);
+
+            // Update gold for remote player
+            if (playerNumber !== this.playerNumber && gold !== undefined) {
+                this.playerGold.set(playerNumber, gold);
+                const goldText = this.goldTexts.get(playerNumber);
+                if (goldText) {
+                    goldText.setText(`${Math.floor(gold)}`);
+                }
+            }
         };
 
         window.addEventListener("towerBuilt", handleTowerBuilt);
@@ -577,7 +656,8 @@ export class MainGameScene extends Phaser.Scene {
         // Listen for trap tower building events
         const handleTrapBuilt = (event: Event) => {
             const customEvent = event as CustomEvent;
-            const { trapId, x, y, trapType, playerNumber } = customEvent.detail;
+            const { trapId, x, y, trapType, playerNumber, gold } =
+                customEvent.detail;
             console.log(
                 `🪤 Remote trap built at (${x}, ${y}) type ${trapType}`,
             );
@@ -596,9 +676,12 @@ export class MainGameScene extends Phaser.Scene {
             this.trapTowers.set(trapId, trapTower);
 
             // Update gold for remote player
-            if (playerNumber !== this.playerNumber) {
-                const currentGold = this.playerGold.get(playerNumber) || 0;
-                this.playerGold.set(playerNumber, Math.max(0, currentGold - 3));
+            if (playerNumber !== this.playerNumber && gold !== undefined) {
+                this.playerGold.set(playerNumber, gold);
+                const goldText = this.goldTexts.get(playerNumber);
+                if (goldText) {
+                    goldText.setText(`${Math.floor(gold)}`);
+                }
             }
         };
 
@@ -623,6 +706,96 @@ export class MainGameScene extends Phaser.Scene {
         };
 
         window.addEventListener("foodGoldSync", handleFoodGoldSync);
+
+        // Listen for farm upgrade events
+        const handleFarmUpgrade = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { farmId, level, playerNumber, gold } = customEvent.detail;
+
+            if (playerNumber !== this.playerNumber) {
+                const farm = this.farms.get(farmId);
+                if (farm) {
+                    farm.level = level;
+                    farm.productionTimer = 0;
+                }
+                this.playerGold.set(playerNumber, gold);
+                const goldText = this.goldTexts.get(playerNumber);
+                if (goldText) {
+                    goldText.setText(`${Math.floor(gold)}`);
+                }
+            }
+        };
+
+        window.addEventListener("farmUpgrade", handleFarmUpgrade);
+
+        // Listen for tower upgrade events
+        const handleTowerUpgrade = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { towerId, level, playerNumber, gold } = customEvent.detail;
+
+            if (playerNumber !== this.playerNumber) {
+                const tower = this.towers.get(towerId);
+                if (tower) {
+                    tower.level = level;
+                    (tower as any).fireRate = 500 / level;
+                }
+                this.playerGold.set(playerNumber, gold);
+                const goldText = this.goldTexts.get(playerNumber);
+                if (goldText) {
+                    goldText.setText(`${Math.floor(gold)}`);
+                }
+            }
+        };
+
+        window.addEventListener("towerUpgrade", handleTowerUpgrade);
+
+        // Listen for trap tower upgrade events
+        const handleTrapUpgrade = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { trapId, level, playerNumber, gold } = customEvent.detail;
+
+            if (playerNumber !== this.playerNumber) {
+                const trapTower = this.trapTowers.get(trapId);
+                if (trapTower) {
+                    trapTower.level = level;
+                    (trapTower as any).maxCapacity = 3 + (level - 1);
+                }
+                this.playerGold.set(playerNumber, gold);
+                const goldText = this.goldTexts.get(playerNumber);
+                if (goldText) {
+                    goldText.setText(`${Math.floor(gold)}`);
+                }
+            }
+        };
+
+        window.addEventListener("trapUpgrade", handleTrapUpgrade);
+
+        // Listen for full game state sync from player 1
+        const handleGameStateSync = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const state = customEvent.detail;
+
+            // Only process if we're player 2 receiving state from player 1
+            if (this.playerNumber !== 2 || state.playerNumber !== 1) return;
+
+            // Update player 1's resources
+            this.playerGold.set(1, state.gold);
+            this.playerFood.set(1, state.food);
+            this.playerTotalFood.set(1, state.totalFood);
+            this.cityTargetHitCount.set(1, state.cityHitCount);
+
+            // Update gold display
+            const goldText = this.goldTexts.get(1);
+            if (goldText) {
+                goldText.setText(`${Math.floor(state.gold)}`);
+            }
+
+            console.log(
+                `📊 Game state synced from player 1: ${state.towersCount} towers, ${state.trapTowersCount} traps, ${state.farmsCount} farms, ${state.enemiesCount} enemies`,
+            );
+        };
+
+        window.addEventListener("gameStateSync", handleGameStateSync);
 
         // Listen for mask toggle events
         const handleMaskToggled = (event: Event) => {
@@ -679,6 +852,10 @@ export class MainGameScene extends Phaser.Scene {
             window.removeEventListener("towerBuilt", handleTowerBuilt);
             window.removeEventListener("trapBuilt", handleTrapBuilt);
             window.removeEventListener("foodGoldSync", handleFoodGoldSync);
+            window.removeEventListener("farmUpgrade", handleFarmUpgrade);
+            window.removeEventListener("towerUpgrade", handleTowerUpgrade);
+            window.removeEventListener("trapUpgrade", handleTrapUpgrade);
+            window.removeEventListener("gameStateSync", handleGameStateSync);
             window.removeEventListener("maskToggled", handleMaskToggled);
             window.removeEventListener("bookToggled", handleBookToggled);
         });
@@ -689,6 +866,11 @@ export class MainGameScene extends Phaser.Scene {
     update(time: number, dt: number) {
         // Track game time for consumption scaling
         this.gameTime += dt;
+
+        // Broadcast game state every 1 second (player 1 to player 2)
+        if (this.playerNumber === 1 && time % 1000 < dt) {
+            this.broadcastGameState();
+        }
 
         // Update all characters' movement
         this.characters.forEach((character) => {
@@ -737,7 +919,12 @@ export class MainGameScene extends Phaser.Scene {
             if (newTimer >= 5000) {
                 // Calculate consumption based on game time (adds 2 each minute, max 16)
                 const minutesPassed = Math.floor(this.gameTime / 60000);
-                const scaledConsumption = Math.min(2 + 2 * minutesPassed, 16);
+                const baseConsumption = Math.min(2 + 2 * minutesPassed, 16);
+                const hitCount = this.cityTargetHitCount.get(playerNum) || 0;
+                const consumptionMultiplier = 1 + hitCount * 0.02;
+                const scaledConsumption =
+                    Math.round(baseConsumption * consumptionMultiplier * 10) /
+                    10;
 
                 const currentFood = this.playerFood.get(playerNum) || 0;
                 const nextFood = Math.max(0, currentFood - scaledConsumption);
@@ -822,6 +1009,106 @@ export class MainGameScene extends Phaser.Scene {
             }
         });
         deadEnemies.forEach((id) => this.enemies.delete(id));
+    }
+
+    handleCityTargetReached(targetPlayerNumber: number) {
+        if (targetPlayerNumber !== this.playerNumber) return;
+
+        const current = this.cityTargetHitCount.get(targetPlayerNumber) || 0;
+        const next = current + 1;
+        this.cityTargetHitCount.set(targetPlayerNumber, next);
+        console.log(
+            `🏰 City target reached for player ${targetPlayerNumber}. Consumption +${
+                next * 2
+            }%`,
+        );
+    }
+
+    // Broadcast comprehensive game state to player 2
+    broadcastGameState() {
+        if (!this.networkManager || this.playerNumber !== 1) return;
+
+        // Collect all towers data
+        const towersData: any[] = [];
+        this.towers.forEach((tower, id) => {
+            towersData.push({
+                id,
+                x: tower.x,
+                y: tower.y,
+                level: tower.level,
+                playerNumber: tower.playerNumber,
+            });
+        });
+
+        // Collect all trap towers data
+        const trapTowersData: any[] = [];
+        this.trapTowers.forEach((trap, id) => {
+            trapTowersData.push({
+                id,
+                x: trap.x,
+                y: trap.y,
+                level: trap.level,
+                trapType: (trap as any).trapType || 1,
+                playerNumber: trap.playerNumber,
+            });
+        });
+
+        // Collect all farms data
+        const farmsData: any[] = [];
+        this.farms.forEach((farm, id) => {
+            farmsData.push({
+                id,
+                x: farm.x,
+                y: farm.y,
+                level: farm.level,
+                totalFood: farm.totalFood,
+                playerNumber: farm.playerNumber,
+            });
+        });
+
+        // Collect all enemies data
+        const enemiesData: any[] = [];
+        this.enemies.forEach((enemy, id) => {
+            enemiesData.push({
+                id,
+                x: enemy.x,
+                y: enemy.y,
+                health: (enemy as any).health || 100,
+                targetPlayerNumber: enemy.targetPlayerNumber,
+            });
+        });
+
+        const gameState = {
+            playerNumber: this.playerNumber,
+            gold: this.playerGold.get(this.playerNumber) || 0,
+            food: this.playerFood.get(this.playerNumber) || 0,
+            totalFood: this.playerTotalFood.get(this.playerNumber) || 0,
+            cityHitCount: this.cityTargetHitCount.get(this.playerNumber) || 0,
+            gameTime: this.gameTime,
+            towers: towersData,
+            trapTowers: trapTowersData,
+            farms: farmsData,
+            enemies: enemiesData,
+            towersCount: this.towers.size,
+            trapTowersCount: this.trapTowers.size,
+            farmsCount: this.farms.size,
+            enemiesCount: this.enemies.size,
+        };
+
+        this.networkManager.sendAction("game_state_sync", gameState);
+    }
+
+    handleCityTargetCleared(targetPlayerNumber: number) {
+        if (targetPlayerNumber !== this.playerNumber) return;
+
+        const current = this.cityTargetHitCount.get(targetPlayerNumber) || 0;
+        const next = Math.max(0, current - 1);
+        this.cityTargetHitCount.set(targetPlayerNumber, next);
+        console.log(
+            `🏰 City target cleared for player ${targetPlayerNumber}. Consumption +${
+                next * 2
+            }%`,
+        );
     }
 
     spawnInitialEnemies() {
@@ -945,6 +1232,11 @@ export class MainGameScene extends Phaser.Scene {
             this.farmPopup = null;
         }
 
+        if (this.towerPopup) {
+            this.towerPopup.destroy();
+            this.towerPopup = null;
+        }
+
         if (this.towerSelectionPopup) {
             this.towerSelectionPopup.destroy();
             this.towerSelectionPopup = null;
@@ -996,23 +1288,32 @@ export class MainGameScene extends Phaser.Scene {
         const localChar = this.characters.get(this.playerNumber);
 
         // Click handler
-        buttonBg.on("pointerdown", () => {
-            if (localChar) {
-                const newMaskState = !localChar.getHasMask();
-                localChar.setHasMask(newMaskState);
-                crossIcon.setVisible(!newMaskState);
+        buttonBg.on(
+            "pointerdown",
+            (
+                _pointer: Phaser.Input.Pointer,
+                _localX: number,
+                _localY: number,
+                event: Phaser.Types.Input.EventData,
+            ) => {
+                event.stopPropagation();
+                if (localChar) {
+                    const newMaskState = !localChar.getHasMask();
+                    localChar.setHasMask(newMaskState);
+                    crossIcon.setVisible(!newMaskState);
 
-                // Broadcast mask state to network
-                if (this.networkManager) {
-                    this.networkManager.sendAction("toggle_mask", {
-                        playerNumber: this.playerNumber,
-                        hasMask: newMaskState,
-                    });
+                    // Broadcast mask state to network
+                    if (this.networkManager) {
+                        this.networkManager.sendAction("toggle_mask", {
+                            playerNumber: this.playerNumber,
+                            hasMask: newMaskState,
+                        });
+                    }
+
+                    console.log(`🎭 Mask toggled: ${newMaskState}`);
                 }
-
-                console.log(`🎭 Mask toggled: ${newMaskState}`);
-            }
-        });
+            },
+        );
 
         // Hover effects
         buttonBg.on("pointerover", () => {
@@ -1080,23 +1381,32 @@ export class MainGameScene extends Phaser.Scene {
         const localChar = this.characters.get(this.playerNumber);
 
         // Click handler
-        buttonBg.on("pointerdown", () => {
-            if (localChar) {
-                const newBookState = !localChar.getHasBook();
-                localChar.setHasBook(newBookState);
-                crossIcon.setVisible(!newBookState);
+        buttonBg.on(
+            "pointerdown",
+            (
+                _pointer: Phaser.Input.Pointer,
+                _localX: number,
+                _localY: number,
+                event: Phaser.Types.Input.EventData,
+            ) => {
+                event.stopPropagation();
+                if (localChar) {
+                    const newBookState = !localChar.getHasBook();
+                    localChar.setHasBook(newBookState);
+                    crossIcon.setVisible(!newBookState);
 
-                // Broadcast book state to network
-                if (this.networkManager) {
-                    this.networkManager.sendAction("toggle_book", {
-                        playerNumber: this.playerNumber,
-                        hasBook: newBookState,
-                    });
+                    // Broadcast book state to network
+                    if (this.networkManager) {
+                        this.networkManager.sendAction("toggle_book", {
+                            playerNumber: this.playerNumber,
+                            hasBook: newBookState,
+                        });
+                    }
+
+                    console.log(`📕 Book toggled: ${newBookState}`);
                 }
-
-                console.log(`📕 Book toggled: ${newBookState}`);
-            }
-        });
+            },
+        );
 
         // Hover effects
         buttonBg.on("pointerover", () => {
@@ -1328,9 +1638,11 @@ export class MainGameScene extends Phaser.Scene {
 
     private isInCommonTargetArea(x: number, y: number): boolean {
         const midX = this.scale.width / 2;
-        const commonTargetMinY = this.scale.height - 240; // last 6 rows
-        const commonTargetMinX = midX - 240;
-        const commonTargetMaxX = midX + 240;
+        const commonTargetWidth = 8 * 40;
+        const commonTargetHeight = 5 * 40;
+        const commonTargetMinY = this.scale.height - commonTargetHeight; // last 5 rows
+        const commonTargetMinX = midX - commonTargetWidth / 2 - 40; // shift left by 1 tile
+        const commonTargetMaxX = midX + commonTargetWidth / 2 - 40;
 
         return (
             y >= commonTargetMinY &&
@@ -1407,23 +1719,30 @@ export class MainGameScene extends Phaser.Scene {
 
     private isValidBuildLocation(gridX: number, gridY: number): boolean {
         const gridSize = 40;
+        const sceneWidth = this.scale.width;
+        const sceneHeight = this.scale.height;
+        const midX = sceneWidth / 2;
 
-        // Check if in restricted area
+        // Check if in restricted area (match highlighted zones)
         const restrictedZones = [
             {
-                rows: [6, 7, 8, 9],
-                columns: Array.from({ length: 17 }, (_, i) => i + 6).concat(
-                    Array.from({ length: 18 }, (_, i) => i + 25),
-                ), // Columns 6-22 and 25-42
+                rows: [5],
+                columns: Array.from({ length: 11 }, (_, i) => i + 4).concat(
+                    Array.from({ length: 11 }, (_, i) => i + 17),
+                ), // Columns 4-14 and 17-27
             },
             {
-                rows: Array.from({ length: 13 }, (_, i) => i + 8), // Rows 8-20
-                columns: [20, 21, 22, 25, 26, 27],
+                rows: Array.from({ length: 4 }, (_, i) => i + 6),
+                columns: [14, 17],
             },
         ];
 
+        const towerRows = [gridY, gridY + 1];
+        const towerCols = [gridX];
         const inRestrictedZone = restrictedZones.some(
-            (zone) => zone.rows.includes(gridY) && zone.columns.includes(gridX),
+            (zone) =>
+                towerRows.some((row) => zone.rows.includes(row)) &&
+                towerCols.some((col) => zone.columns.includes(col)),
         );
         if (inRestrictedZone) {
             console.log(
@@ -1436,6 +1755,63 @@ export class MainGameScene extends Phaser.Scene {
         const x = gridX * gridSize + gridSize / 2; // Center of 1x2 tower
         const y = gridY * gridSize + gridSize;
 
+        const towerBounds = {
+            left: gridX * gridSize,
+            right: gridX * gridSize + 40,
+            top: gridY * gridSize,
+            bottom: gridY * gridSize + 80,
+        };
+
+        const overlapsRect = (rect: {
+            left: number;
+            right: number;
+            top: number;
+            bottom: number;
+        }) =>
+            !(
+                towerBounds.right <= rect.left ||
+                towerBounds.left >= rect.right ||
+                towerBounds.bottom <= rect.top ||
+                towerBounds.top >= rect.bottom
+            );
+
+        // Prevent building on city targets
+        const cityTargetSize = 4 * gridSize;
+        const cityTargetRow = 3;
+        const cityTargetColFromEdge = 0;
+        const leftCityBounds = {
+            left: cityTargetColFromEdge * gridSize,
+            right: cityTargetColFromEdge * gridSize + cityTargetSize,
+            top: cityTargetRow * gridSize,
+            bottom: cityTargetRow * gridSize + cityTargetSize,
+        };
+        const rightCityBounds = {
+            left: 28 * gridSize,
+            right: 28 * gridSize + cityTargetSize,
+            top: cityTargetRow * gridSize,
+            bottom: cityTargetRow * gridSize + cityTargetSize,
+        };
+
+        if (overlapsRect(leftCityBounds) || overlapsRect(rightCityBounds)) {
+            console.log(`❌ Cannot build on city target area`);
+            return false;
+        }
+
+        // Prevent building on common target area
+        const commonTargetWidth = 8 * gridSize;
+        const commonTargetHeight = 5 * gridSize;
+        const commonTargetBounds = {
+            left: midX - commonTargetWidth / 2 - gridSize,
+            right: midX + commonTargetWidth / 2 - gridSize,
+            top: sceneHeight - commonTargetHeight,
+            bottom: sceneHeight,
+        };
+
+        if (overlapsRect(commonTargetBounds)) {
+            console.log(`❌ Cannot build on common target area`);
+            return false;
+        }
+
         // Prevent building on top of farms (3x3 grid = 120x120)
         let overlapsFarm = false;
         this.farms.forEach((farm) => {
@@ -1446,21 +1822,7 @@ export class MainGameScene extends Phaser.Scene {
                 top: farm.y,
                 bottom: farm.y + 120,
             };
-            const towerBounds = {
-                left: gridX * gridSize,
-                right: gridX * gridSize + 40,
-                top: gridY * gridSize,
-                bottom: gridY * gridSize + 80,
-            };
-
-            const overlaps = !(
-                towerBounds.right < farmBounds.left ||
-                towerBounds.left > farmBounds.right ||
-                towerBounds.bottom < farmBounds.top ||
-                towerBounds.top > farmBounds.bottom
-            );
-
-            if (overlaps) {
+            if (overlapsRect(farmBounds)) {
                 overlapsFarm = true;
             }
         });
@@ -1500,10 +1862,24 @@ export class MainGameScene extends Phaser.Scene {
     }
 
     private buildRegularTower(x: number, y: number) {
-        const totalFood = this.playerTotalFood.get(this.playerNumber) || 0;
-        if (totalFood <= 0) {
-            console.log("❌ Not enough food to build tower");
+        const currentGold = this.playerGold.get(this.playerNumber) || 0;
+        const towerCost = 10;
+
+        if (currentGold < towerCost) {
+            console.log(
+                `❌ Not enough gold to build tower (need ${towerCost}, have ${currentGold})`,
+            );
             return;
+        }
+
+        // Deduct gold
+        const newGold = currentGold - towerCost;
+        this.playerGold.set(this.playerNumber, newGold);
+
+        // Update gold display
+        const goldText = this.goldTexts.get(this.playerNumber);
+        if (goldText) {
+            goldText.setText(`${Math.floor(newGold)}`);
         }
 
         const towerId = `tower-${this.playerNumber}-${Date.now()}`;
@@ -1523,8 +1899,18 @@ export class MainGameScene extends Phaser.Scene {
                 x,
                 y,
                 playerNumber: this.playerNumber,
+                gold: newGold,
             });
         }
+
+        // Close tower selection menu after building
+        if (this.towerSelectionPopup) {
+            this.towerSelectionPopup.hide();
+        }
+
+        console.log(
+            `✅ Built regular tower for ${towerCost} gold. Gold remaining: ${newGold}`,
+        );
     }
 
     private buildTrapTower(x: number, y: number, trapType: number) {
@@ -1571,7 +1957,13 @@ export class MainGameScene extends Phaser.Scene {
                 y: trapY,
                 trapType,
                 playerNumber: this.playerNumber,
+                gold: newGold,
             });
+        }
+
+        // Close tower selection menu after building
+        if (this.towerSelectionPopup) {
+            this.towerSelectionPopup.hide();
         }
 
         console.log(

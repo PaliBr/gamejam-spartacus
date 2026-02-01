@@ -15,12 +15,13 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
     private trapId: string;
     private trapType: number;
     private attractionRadius: number = 80; // 2 grid cells (40px * 2)
-    private maxCapacity: number = 3;
+    private maxCapacity: number = 3; // Base capacity
     private trappedEnemies: Set<string> = new Set();
     private enemyTimers: Map<string, number> = new Map(); // Track time each enemy has been trapped
     private despawnTime: number = 3000; // 3 seconds in milliseconds
     private networkManager: any;
     private playerNumber: number;
+    public level: number = 1; // Trap tower level (1-5)
 
     constructor(config: TrapTowerConfig) {
         super(config.scene, config.x, config.y, "");
@@ -62,10 +63,76 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
         this.setOrigin(0.5, 0.5); // Center the sprite on the grid position
         config.scene.add.existing(this);
         this.setDepth(5);
+        this.setInteractive(
+            new Phaser.Geom.Circle(0, 0, 20),
+            Phaser.Geom.Circle.Contains,
+        );
+        this.setData("isClickable", true);
 
         console.log(
             `🪤 Trap ${this.trapId} (type ${this.trapType}) built at (${config.x}, ${config.y})`,
         );
+    }
+
+    upgrade(): boolean {
+        if (this.level < 5) {
+            // Calculate upgrade cost: level * 6 gold
+            const upgradeCost = this.level * 6;
+
+            // Get current gold from scene (MainGameScene)
+            const mainScene = this.scene as any;
+            const currentGold =
+                mainScene.playerGold?.get(this.playerNumber) || 0;
+
+            if (currentGold < upgradeCost) {
+                console.log(
+                    `❌ Not enough gold to upgrade trap tower (need ${upgradeCost}, have ${currentGold})`,
+                );
+                return false;
+            }
+
+            // Deduct gold
+            const newGold = currentGold - upgradeCost;
+            mainScene.playerGold?.set(this.playerNumber, newGold);
+
+            // Update gold display
+            const goldText = mainScene.goldTexts?.get(this.playerNumber);
+            if (goldText) {
+                goldText.setText(`${Math.floor(newGold)}`);
+            }
+
+            this.level++;
+            // Increase capacity by 1 per level (level 1: 3, level 2: 4, level 3: 5, level 4: 6, level 5: 7)
+            this.maxCapacity = 3 + (this.level - 1);
+
+            // Broadcast upgrade to network
+            if (mainScene.networkManager) {
+                mainScene.networkManager.sendAction("trap_upgrade", {
+                    trapId: this.trapId,
+                    level: this.level,
+                    playerNumber: this.playerNumber,
+                    gold: newGold,
+                });
+            }
+
+            console.log(
+                `⬆️ Trap tower upgraded to level ${this.level} for ${upgradeCost} gold. Max capacity: ${this.maxCapacity}`,
+            );
+            return true;
+        }
+        return false;
+    }
+
+    downgrade(): boolean {
+        if (this.level > 1) {
+            this.level--;
+            this.maxCapacity = 3 + (this.level - 1);
+            console.log(
+                `⬇️ Trap tower downgraded to level ${this.level}. Max capacity: ${this.maxCapacity}`,
+            );
+            return true;
+        }
+        return false;
     }
 
     update(enemies: Map<string, Enemy>, dt: number) {

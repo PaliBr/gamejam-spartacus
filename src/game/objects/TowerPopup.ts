@@ -1,9 +1,10 @@
 import Phaser from "phaser";
-import { Farm } from "./Farm";
+import { Tower } from "./Tower";
+import { TrapTower } from "./TrapTower";
 
-export class FarmPopup {
+export class TowerPopup {
     private scene: Phaser.Scene;
-    private farm: Farm | null = null;
+    private tower: Tower | TrapTower | null = null;
     private popupBg: Phaser.GameObjects.Rectangle | null = null;
     private upgradeButton: Phaser.GameObjects.Rectangle | null = null;
     private downgradeButton: Phaser.GameObjects.Rectangle | null = null;
@@ -16,17 +17,17 @@ export class FarmPopup {
         this.scene = scene;
     }
 
-    show(farm: Farm) {
+    show(tower: Tower | TrapTower) {
         if (this.isVisible) {
             this.hide();
         }
 
-        this.farm = farm;
+        this.tower = tower;
         this.isVisible = true;
 
-        // Center popup on the farm (farm is 120x120, center is at +60)
-        const popupX = farm.x + 60;
-        const popupY = farm.y + 60;
+        // Center popup on the tower
+        const popupX = tower.x + (tower instanceof Tower ? 20 : 0); // Tower origin is 0,0, TrapTower is 0.5,0.5
+        const popupY = tower.y + (tower instanceof Tower ? 40 : 0);
         const popupWidth = 160;
         const popupHeight = 120;
 
@@ -43,16 +44,20 @@ export class FarmPopup {
         this.popupBg.setDepth(200);
         this.popupBg.setInteractive();
 
-        // Title showing farm type and current level
-        const farmName =
-            farm.farmType.charAt(0).toUpperCase() + farm.farmType.slice(1);
-        const upgradeCost = farm.level * 6;
+        // Title showing tower type and current level
+        const towerType = tower instanceof Tower ? "Tower" : "Trap Tower";
+        const upgradeCost = tower.level * 6;
+        const levelInfo =
+            tower instanceof Tower
+                ? `Speed: ${(500 / tower.level).toFixed(0)}ms`
+                : `Capacity: ${3 + (tower.level - 1)}`;
+
         this.titleText = this.scene.add.text(
             popupX,
             popupY - 35,
-            `${farmName}\nLevel ${farm.level}\nUpgrade: ${upgradeCost}g`,
+            `${towerType}\nLevel ${tower.level}\n${levelInfo}\nUpgrade: ${upgradeCost}g`,
             {
-                fontSize: "14px",
+                fontSize: "12px",
                 color: "#ffffff",
                 align: "center",
                 stroke: "#000000",
@@ -135,9 +140,9 @@ export class FarmPopup {
                 event: Phaser.Types.Input.EventData,
             ) => {
                 event.stopPropagation();
-                const success = farm.upgrade();
+                const success = tower.upgrade();
                 if (success) {
-                    this.show(farm); // Refresh popup only if upgrade succeeded
+                    this.show(tower); // Refresh popup only if upgrade succeeded
                 }
             },
         );
@@ -159,8 +164,10 @@ export class FarmPopup {
                 event: Phaser.Types.Input.EventData,
             ) => {
                 event.stopPropagation();
-                farm.downgrade();
-                this.show(farm); // Refresh popup
+                const success = tower.downgrade();
+                if (success) {
+                    this.show(tower); // Refresh popup
+                }
             },
         );
 
@@ -208,7 +215,7 @@ export class FarmPopup {
         this.upgradeText = null;
         this.downgradeText = null;
         this.titleText = null;
-        this.farm = null;
+        this.tower = null;
         this.isVisible = false;
     }
 

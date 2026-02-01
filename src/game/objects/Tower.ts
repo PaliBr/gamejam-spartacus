@@ -13,13 +13,14 @@ interface TowerConfig {
 export class Tower extends Phaser.GameObjects.Sprite {
     private towerId: string;
     private range: number = 150; // Shooting range
-    private fireRate: number = 500; // ms between shots
+    private fireRate: number = 500; // ms between shots (base speed)
     private lastShotTime: number = 0;
     private networkManager: any;
     private playerNumber: number;
     private killedEnemies: string[] = [];
     private lastFlushTime: number = 0;
     private flushInterval: number = 1000; // milliseconds
+    public level: number = 1; // Tower level (1-5)
 
     constructor(config: TowerConfig) {
         super(config.scene, config.x, config.y, "");
@@ -39,10 +40,77 @@ export class Tower extends Phaser.GameObjects.Sprite {
         this.setDisplaySize(40, 80);
         config.scene.add.existing(this);
         this.setDepth(5);
+        this.setInteractive(
+            new Phaser.Geom.Rectangle(0, 0, 40, 80),
+            Phaser.Geom.Rectangle.Contains,
+        );
+        this.setData("isClickable", true);
 
         console.log(
             `🏗️ Tower ${this.towerId} built at (${config.x}, ${config.y})`,
         );
+    }
+
+    upgrade(): boolean {
+        if (this.level < 5) {
+            // Calculate upgrade cost: level * 6 gold
+            const upgradeCost = this.level * 6;
+
+            // Get current gold from scene (MainGameScene)
+            const mainScene = this.scene as any;
+            const currentGold =
+                mainScene.playerGold?.get(this.playerNumber) || 0;
+
+            if (currentGold < upgradeCost) {
+                console.log(
+                    `❌ Not enough gold to upgrade tower (need ${upgradeCost}, have ${currentGold})`,
+                );
+                return false;
+            }
+
+            // Deduct gold
+            const newGold = currentGold - upgradeCost;
+            mainScene.playerGold?.set(this.playerNumber, newGold);
+
+            // Update gold display
+            const goldText = mainScene.goldTexts?.get(this.playerNumber);
+            if (goldText) {
+                goldText.setText(`${Math.floor(newGold)}`);
+            }
+
+            this.level++;
+            // Increase fire rate (decrease fire delay)
+            // Level 1: 500ms, Level 2: 400ms, Level 3: 333ms, Level 4: 285ms, Level 5: 250ms
+            this.fireRate = 500 / this.level;
+
+            // Broadcast upgrade to network
+            if (mainScene.networkManager) {
+                mainScene.networkManager.sendAction("tower_upgrade", {
+                    towerId: this.towerId,
+                    level: this.level,
+                    playerNumber: this.playerNumber,
+                    gold: newGold,
+                });
+            }
+
+            console.log(
+                `⬆️ Tower upgraded to level ${this.level} for ${upgradeCost} gold. Fire rate: ${this.fireRate.toFixed(0)}ms`,
+            );
+            return true;
+        }
+        return false;
+    }
+
+    downgrade(): boolean {
+        if (this.level > 1) {
+            this.level--;
+            this.fireRate = 500 / this.level;
+            console.log(
+                `⬇️ Tower downgraded to level ${this.level}. Fire rate: ${this.fireRate.toFixed(0)}ms`,
+            );
+            return true;
+        }
+        return false;
     }
 
     update(enemies: Map<string, Enemy>) {

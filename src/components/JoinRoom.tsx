@@ -121,7 +121,7 @@ export function JoinRoom({ onRoomJoined, onError }: JoinRoomProps) {
                 </label>
                 <input
                     type="text"
-                    placeholder="ABCD12"
+                    placeholder="ABCDEF"
                     value={roomCode}
                     onChange={(e) => handleRoomCodeChange(e.target.value)}
                     onKeyDown={handleKeyPress}

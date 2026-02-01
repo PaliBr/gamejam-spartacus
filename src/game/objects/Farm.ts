@@ -140,13 +140,51 @@ export class Farm extends Phaser.GameObjects.Rectangle {
 
     upgrade() {
         if (this.level < 3) {
+            // Calculate upgrade cost: level * 6 gold
+            const upgradeCost = this.level * 6;
+
+            // Get current gold from scene (MainGameScene)
+            const mainScene = this.scene as any;
+            const currentGold =
+                mainScene.playerGold?.get(this.playerNumber) || 0;
+
+            if (currentGold < upgradeCost) {
+                console.log(
+                    `❌ Not enough gold to upgrade ${this.farmType} (need ${upgradeCost}, have ${currentGold})`,
+                );
+                return false;
+            }
+
+            // Deduct gold
+            const newGold = currentGold - upgradeCost;
+            mainScene.playerGold?.set(this.playerNumber, newGold);
+
+            // Update gold display
+            const goldText = mainScene.goldTexts?.get(this.playerNumber);
+            if (goldText) {
+                goldText.setText(`${Math.floor(newGold)}`);
+            }
+
             this.level++;
             this.productionTimer = 0;
             this.updateLevelIcon();
+
+            // Broadcast upgrade to network
+            if (mainScene.networkManager) {
+                mainScene.networkManager.sendAction("farm_upgrade", {
+                    farmId: this.farmId,
+                    level: this.level,
+                    playerNumber: this.playerNumber,
+                    gold: newGold,
+                });
+            }
+
             console.log(
-                `⬆️ Farm ${this.farmType} upgraded to level ${this.level}`,
+                `⬆️ Farm ${this.farmType} upgraded to level ${this.level} for ${upgradeCost} gold`,
             );
+            return true;
         }
+        return false;
     }
 
     downgrade() {
@@ -187,10 +225,38 @@ export class Farm extends Phaser.GameObjects.Rectangle {
         let baseProduction = this.level === 3 ? this.level + 1 : this.level;
 
         // Apply enemy penalty: each enemy reduces production by 10%
-        const penaltyPercent = this.enemiesOnFarm.size * 10;
-        const reduction = baseProduction * (penaltyPercent / 100);
+        const enemyPenaltyPercent = this.enemiesOnFarm.size * 10;
+        const enemyReduction = baseProduction * (enemyPenaltyPercent / 100);
 
-        return Math.max(0, baseProduction - reduction);
+        // Apply tower proximity penalty: check for adjacent towers (within 1 grid cell = 40px)
+        const mainScene = this.scene as any;
+        let towerPenalty = 0;
+
+        if (mainScene.towers) {
+            mainScene.towers.forEach((tower: any) => {
+                // Check if farm center is within tower's shooting range (150px)
+                // Farm center is at (x + 60, y + 60) for 120x120 farm
+                // Tower is at (x, y) with origin 0,0
+                const farmCenterX = this.x + 60;
+                const farmCenterY = this.y + 60;
+                const towerX = tower.x + 20; // Tower center (40px wide)
+                const towerY = tower.y + 40; // Tower center (80px tall)
+
+                const distance = Math.sqrt(
+                    Math.pow(farmCenterX - towerX, 2) +
+                        Math.pow(farmCenterY - towerY, 2),
+                );
+
+                const towerRange = tower.getRange ? tower.getRange() : 150;
+
+                if (distance <= towerRange) {
+                    // Reduce production by 0.1 * tower level if farm is in shooting range
+                    towerPenalty += 0.1 * tower.level;
+                }
+            });
+        }
+
+        return Math.max(0, baseProduction - enemyReduction - towerPenalty);
     }
 
     update(dt: number, enemies: Map<string, Enemy>) {

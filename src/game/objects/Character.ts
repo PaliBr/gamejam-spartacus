@@ -133,24 +133,18 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         const gridSize = 40;
 
         // Menu area restrictions:
-        // Left menu: 19 columns from left, 7 rows from bottom = 0-760px width, last 7 rows (440-720px height)
-        // Right menu: 19 columns from right, 7 rows from bottom = 520-1280px width, last 7 rows (440-720px height)
-        // Bottom center menu: 19 columns centered, 2 rows = 240-1000px width, last 2 rows (640-720px height)
+        // Left menu: 12 columns from left, 5 rows from bottom = 0-480px width, last 5 rows (520-720px height)
+        // Right menu: 12 columns from right, 5 rows from bottom = 800-1280px width, last 5 rows (520-720px height)
 
-        const leftMenuMaxX = 19 * gridSize; // 760px (columns 0-18)
-        const rightMenuMinX = sceneWidth - 19 * gridSize; // 520px (columns 13-31)
-        const sideMenuMinY = sceneHeight - 7 * gridSize; // 440px (last 7 rows)
-        const bottomMenuMinY = sceneHeight - 2 * gridSize; // 640px (last 2 rows)
-        const bottomMenuMinX = 6 * gridSize; // 240px (column 6)
-        const bottomMenuMaxX = 26 * gridSize; // 1040px (column 26)
+        const leftMenuMaxX = 12 * gridSize; // 480px (columns 0-11)
+        const rightMenuMinX = sceneWidth - 12 * gridSize; // 800px (columns 20-31)
+        const sideMenuMinY = sceneHeight - 5 * gridSize; // 520px (last 5 rows)
 
         // Check if target is in menu areas
         const inLeftMenu = x < leftMenuMaxX && y >= sideMenuMinY;
         const inRightMenu = x > rightMenuMinX && y >= sideMenuMinY;
-        const inBottomMenu =
-            y >= bottomMenuMinY && x >= bottomMenuMinX && x <= bottomMenuMaxX;
 
-        if (inLeftMenu || inRightMenu || inBottomMenu) {
+        if (inLeftMenu || inRightMenu) {
             console.log(`🚫 Cannot move into menu area!`);
             return;
         }
@@ -168,10 +162,11 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         }
 
         // Check if trying to enter common target area without book
-        // Common target area: bottom 6 rows (Y >= 480), 12 tiles wide centered (X between 400-880)
-        const commonTargetMinY = sceneHeight - 240; // 480px (last 6 rows)
-        const commonTargetMinX = midX - 240; // 400px (6 tiles left from center)
-        const commonTargetMaxX = midX + 240; // 880px (6 tiles right from center)
+        // Common target area: reduced by 2 grid squares from both sides and 1 from top
+        // Original: bottom 6 rows, 12 tiles wide. Now: bottom 5 rows, 8 tiles wide
+        const commonTargetMinY = sceneHeight - 200; // 520px (5 rows from bottom)
+        const commonTargetMinX = midX - 160 - gridSize; // shift left by 1 tile
+        const commonTargetMaxX = midX + 160 - gridSize;
 
         if (!this.hasBook) {
             const inCommonTarget =

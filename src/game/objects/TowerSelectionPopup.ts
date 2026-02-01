@@ -36,8 +36,8 @@ export class TowerSelectionPopup {
         this.container.setDepth(2000);
 
         // Create background
-        const bgWidth = 240;
-        const bgHeight = 280;
+        const bgWidth = 160;
+        const bgHeight = 200;
         this.background = this.scene.add.rectangle(
             0,
             0,
@@ -46,29 +46,32 @@ export class TowerSelectionPopup {
             0x222222,
             0.95,
         );
-        this.background.setStrokeStyle(3, 0xffffff);
+        this.background.setStrokeStyle(2, 0xffffff);
         this.container.add(this.background);
 
         // Add title
         const title = this.scene.add.text(
             0,
-            -bgHeight / 2 + 20,
+            -bgHeight / 2 + 16,
             "Select Tower Type",
             {
-                fontSize: "18px",
+                fontSize: "14px",
                 fontFamily: "Arial",
                 color: "#ffffff",
                 fontStyle: "bold",
+                stroke: "#000000",
+                strokeThickness: 3,
             },
         );
         title.setOrigin(0.5, 0.5);
+        title.setResolution(2);
         this.container.add(title);
 
         // Create buttons for regular tower and 4 trap types
-        const buttonWidth = 200;
-        const buttonHeight = 40;
-        const startY = -bgHeight / 2 + 60;
-        const spacing = 45;
+        const buttonWidth = 140;
+        const buttonHeight = 28;
+        const startY = -bgHeight / 2 + 46;
+        const spacing = 32;
 
         // Regular tower button
         this.createButton(
@@ -76,7 +79,7 @@ export class TowerSelectionPopup {
             startY,
             buttonWidth,
             buttonHeight,
-            "Regular Tower (Free)",
+            "Regular Tower (10 Gold)",
             0x6666ff,
             () => {
                 if (this.onSelectCallback) {
@@ -137,12 +140,15 @@ export class TowerSelectionPopup {
         button.setInteractive({ cursor: "pointer" });
 
         const buttonText = this.scene.add.text(x, y, text, {
-            fontSize: "14px",
+            fontSize: "10px",
             fontFamily: "Arial",
             color: "#ffffff",
             fontStyle: "bold",
+            stroke: "#000000",
+            strokeThickness: 2,
         });
         buttonText.setOrigin(0.5, 0.5);
+        buttonText.setResolution(2);
 
         // Hover effects
         button.on("pointerover", () => {
@@ -155,7 +161,18 @@ export class TowerSelectionPopup {
             button.setScale(1);
         });
 
-        button.on("pointerdown", onClick);
+        button.on(
+            "pointerdown",
+            (
+                _pointer: Phaser.Input.Pointer,
+                _localX: number,
+                _localY: number,
+                event: Phaser.Types.Input.EventData,
+            ) => {
+                event.stopPropagation();
+                onClick();
+            },
+        );
 
         this.buttons.push(button);
         this.texts.push(buttonText);

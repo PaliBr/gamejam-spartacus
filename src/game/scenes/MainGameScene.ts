@@ -248,11 +248,11 @@ export class MainGameScene extends Phaser.Scene {
         // Left side: 4x4 grid, aligned to 40px grid
         // Using grid coordinates (each grid cell = 40px)
         // 1280x720 = 32 columns × 18 rows
-        const targetLeftXGrid = [11, 17, 11, 17]; // Grid positions from left
-        const targetLeftYGrid = [4, 4, 12, 12]; // Grid positions from top
+        const targetLeftXGrid = [9, 15, 9, 15]; // Grid positions from left
+        const targetLeftYGrid = [3, 3, 10, 10]; // Grid positions from top
         // Right side: mirrored
-        const targetRightXGrid = [32, 38, 32, 38]; // Grid positions from left (32 columns)
-        const targetRightYGrid = [4, 4, 12, 12]; // Grid positions from top
+        const targetRightXGrid = [30, 36, 30, 36]; // Grid positions from left (32 columns)
+        const targetRightYGrid = [3, 3, 10, 10]; // Grid positions from top
 
         // Create farms on left side
         // Wheat (yellow), Carrot (red), Sunflower (blue), Potato (green)
@@ -296,6 +296,15 @@ export class MainGameScene extends Phaser.Scene {
             });
 
             this.farms.set(farm.farmId, farm);
+        });
+
+        // Highlight actual farm detection areas (for debugging)
+        this.farms.forEach((farm) => {
+            this.add
+                .rectangle(farm.x, farm.y, 120, 120, 0x00ffff, 0)
+                .setOrigin(0, 0)
+                .setStrokeStyle(2, 0x00ffff, 0.8)
+                .setDepth(1);
         });
 
         // Create common target area at bottom center (12x6 grid cells = 480x240px)
@@ -364,6 +373,39 @@ export class MainGameScene extends Phaser.Scene {
             .setStrokeStyle(2, 0x666666, 0.8)
             .setDepth(0);
 
+        // Define restricted zones
+        const restrictedZones = [
+            {
+                rows: [6, 7, 8, 9],
+                columns: Array.from({ length: 17 }, (_, i) => i + 6).concat(
+                    Array.from({ length: 17 }, (_, i) => i + 25),
+                ), // Columns 6-22 and 25-42
+            },
+            {
+                rows: Array.from({ length: 13 }, (_, i) => i + 8), // Rows 8-20
+                columns: [20, 21, 22, 25, 26, 27],
+            },
+        ];
+
+        // Highlight restricted zones
+        restrictedZones.forEach((zone) => {
+            zone.rows.forEach((row) => {
+                zone.columns.forEach((col) => {
+                    this.add
+                        .rectangle(
+                            col * gridSize + gridSize / 2,
+                            row * gridSize + gridSize / 2,
+                            gridSize,
+                            gridSize,
+                            0xff0000,
+                            0.3,
+                        )
+                        .setStrokeStyle(2, 0xff0000, 0.8)
+                        .setDepth(0);
+                });
+            });
+        });
+
         // Create food bar UI at top
         this.createFoodBar();
 
@@ -390,25 +432,24 @@ export class MainGameScene extends Phaser.Scene {
             // Check if clicking on a farm
             let handled = false;
             this.farms.forEach((farm) => {
-                const distance = Phaser.Math.Distance.Between(
-                    farm.x,
-                    farm.y,
-                    pointer.worldX,
-                    pointer.worldY,
-                );
+                // Check if click is within farm rectangular bounds (3x3 = 120x120)
+                const isInFarm =
+                    pointer.worldX >= farm.x &&
+                    pointer.worldX <= farm.x + 120 &&
+                    pointer.worldY >= farm.y &&
+                    pointer.worldY <= farm.y + 120;
 
-                // Check if player is within 1 tile (40px) of farm and click on farm area
+                // Check if character is standing on the farm
                 const char = this.characters.get(this.playerNumber);
                 if (char) {
-                    const charDistance = Phaser.Math.Distance.Between(
-                        char.x,
-                        char.y,
-                        farm.x,
-                        farm.y,
-                    );
+                    const charOnFarm =
+                        char.x >= farm.x &&
+                        char.x <= farm.x + 120 &&
+                        char.y >= farm.y &&
+                        char.y <= farm.y + 120;
 
-                    if (charDistance <= 40 && distance < 160) {
-                        // Player within 1 tile and click on farm (160px = 4x4 grid)
+                    if (charOnFarm && isInFarm) {
+                        // Character on farm and clicking on farm area
                         this.farmPopup!.show(farm);
                         handled = true;
                     }
@@ -417,6 +458,30 @@ export class MainGameScene extends Phaser.Scene {
 
             if (!handled) {
                 this.showTowerSelectionMenu(pointer);
+            }
+        });
+
+        // Add mousemove listener to change cursor when in allowed building area
+        this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+            const gridSize = 40;
+            const x = Math.floor(pointer.worldX / gridSize) * gridSize;
+            const y = Math.floor(pointer.worldY / gridSize) * gridSize;
+
+            const char = this.characters.get(this.playerNumber);
+            if (char) {
+                const distance = Phaser.Math.Distance.Between(
+                    char.x,
+                    char.y,
+                    x,
+                    y,
+                );
+                const maxBuildDistance = 100; // 2 grid squares away
+
+                if (distance <= maxBuildDistance) {
+                    this.input.setDefaultCursor("crosshair");
+                } else {
+                    this.input.setDefaultCursor("default");
+                }
             }
         });
 
@@ -509,6 +574,56 @@ export class MainGameScene extends Phaser.Scene {
 
         window.addEventListener("towerBuilt", handleTowerBuilt);
 
+        // Listen for trap tower building events
+        const handleTrapBuilt = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { trapId, x, y, trapType, playerNumber } = customEvent.detail;
+            console.log(
+                `🪤 Remote trap built at (${x}, ${y}) type ${trapType}`,
+            );
+            if (this.trapTowers.has(trapId)) {
+                return;
+            }
+            const trapTower = new TrapTower({
+                scene: this,
+                x,
+                y,
+                trapId,
+                trapType,
+                playerNumber,
+                networkManager: this.networkManager,
+            });
+            this.trapTowers.set(trapId, trapTower);
+
+            // Update gold for remote player
+            if (playerNumber !== this.playerNumber) {
+                const currentGold = this.playerGold.get(playerNumber) || 0;
+                this.playerGold.set(playerNumber, Math.max(0, currentGold - 3));
+            }
+        };
+
+        window.addEventListener("trapBuilt", handleTrapBuilt);
+
+        // Listen for food/gold sync events
+        const handleFoodGoldSync = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const { playerNumber, food, gold } = customEvent.detail;
+
+            if (playerNumber !== this.playerNumber) {
+                this.playerFood.set(playerNumber, food);
+                this.playerTotalFood.set(playerNumber, food);
+                this.playerGold.set(playerNumber, gold);
+
+                // Update gold display if exists
+                const goldText = this.goldTexts.get(playerNumber);
+                if (goldText) {
+                    goldText.setText(`${Math.floor(gold)}`);
+                }
+            }
+        };
+
+        window.addEventListener("foodGoldSync", handleFoodGoldSync);
+
         // Listen for mask toggle events
         const handleMaskToggled = (event: Event) => {
             const customEvent = event as CustomEvent;
@@ -562,6 +677,8 @@ export class MainGameScene extends Phaser.Scene {
             window.removeEventListener("spawnEnemies", handleEnemySpawn);
             window.removeEventListener("enemyKilled", handleEnemyKilled);
             window.removeEventListener("towerBuilt", handleTowerBuilt);
+            window.removeEventListener("trapBuilt", handleTrapBuilt);
+            window.removeEventListener("foodGoldSync", handleFoodGoldSync);
             window.removeEventListener("maskToggled", handleMaskToggled);
             window.removeEventListener("bookToggled", handleBookToggled);
         });
@@ -677,6 +794,15 @@ export class MainGameScene extends Phaser.Scene {
                 console.log(
                     `💰 Player ${playerNum} produced ${goldProduction} gold (minute ${minutesPassed}). Total: ${Math.floor(nextGold)}`,
                 );
+
+                // Sync food and gold to other players
+                if (this.networkManager && playerNum === this.playerNumber) {
+                    this.networkManager.sendAction("food_gold_sync", {
+                        playerNumber: playerNum,
+                        food: this.playerFood.get(playerNum) || 0,
+                        gold: nextGold,
+                    });
+                }
             } else {
                 this.goldProductionTimers.set(playerNum, newTimer);
             }
@@ -1162,14 +1288,18 @@ export class MainGameScene extends Phaser.Scene {
         color: number,
         type: "food" | "gold",
     ) {
-        // Position text in middle row of player's zone
-        // Middle row is around y = 360 (half of 720)
+        // Position text at grid square 4 for left (column 4), grid square 28 for right (column 28)
+        // Gold: 1 row above middle, Food: 1 row below middle
         const midY = this.scale.height / 2;
-        const midX = this.scale.width / 2;
+        const gridSize = 40;
 
-        // Player 1 on left side, Player 2 on right side
-        const x = playerNum === 1 ? midX / 2 : midX + midX / 2;
-        const y = midY;
+        // Player 1 on left side (grid 4), Player 2 on right side (grid 28)
+        const x =
+            playerNum === 1
+                ? 4 * gridSize + gridSize / 2
+                : 28 * gridSize + gridSize / 2;
+        const yOffset = type === "gold" ? -gridSize : gridSize; // Gold 1 row up, food 1 row down
+        const y = midY + yOffset;
 
         // Create floating text
         const floatingText = this.add.text(x, y, text, {
@@ -1188,7 +1318,7 @@ export class MainGameScene extends Phaser.Scene {
             targets: floatingText,
             y: y - 50,
             alpha: 0,
-            duration: 1000,
+            duration: 2000,
             ease: "Power2",
             onComplete: () => {
                 floatingText.destroy();
@@ -1226,8 +1356,28 @@ export class MainGameScene extends Phaser.Scene {
 
     private showTowerSelectionMenu(pointer: Phaser.Input.Pointer) {
         const gridSize = 40;
-        const x = Math.round(pointer.worldX / gridSize) * gridSize;
-        const y = Math.round(pointer.worldY / gridSize) * gridSize;
+        const gridX = Math.floor(pointer.worldX / gridSize);
+        const gridY = Math.floor(pointer.worldY / gridSize);
+        const x = gridX * gridSize;
+        const y = gridY * gridSize;
+
+        // Check if player character is within allowed building distance and not moving
+        const char = this.characters.get(this.playerNumber);
+        if (char) {
+            // Prevent building while moving
+            if (char.getIsMoving()) {
+                return;
+            }
+
+            const distance = Phaser.Math.Distance.Between(char.x, char.y, x, y);
+            const maxBuildDistance = 100; // 2 grid squares away
+            if (distance > maxBuildDistance) {
+                console.log(
+                    `❌ Too far to build. Distance: ${Math.round(distance)}, Max: ${maxBuildDistance}`,
+                );
+                return;
+            }
+        }
 
         // Must be outside commonTarget area and in own half
         if (this.isInCommonTargetArea(x, y)) {
@@ -1239,7 +1389,7 @@ export class MainGameScene extends Phaser.Scene {
         }
 
         // Check if location is valid for building
-        if (!this.isValidBuildLocation(x, y)) {
+        if (!this.isValidBuildLocation(gridX, gridY)) {
             return;
         }
 
@@ -1255,12 +1405,62 @@ export class MainGameScene extends Phaser.Scene {
         }
     }
 
-    private isValidBuildLocation(x: number, y: number): boolean {
-        // Prevent building on top of farms
+    private isValidBuildLocation(gridX: number, gridY: number): boolean {
+        const gridSize = 40;
+
+        // Check if in restricted area
+        const restrictedZones = [
+            {
+                rows: [6, 7, 8, 9],
+                columns: Array.from({ length: 17 }, (_, i) => i + 6).concat(
+                    Array.from({ length: 18 }, (_, i) => i + 25),
+                ), // Columns 6-22 and 25-42
+            },
+            {
+                rows: Array.from({ length: 13 }, (_, i) => i + 8), // Rows 8-20
+                columns: [20, 21, 22, 25, 26, 27],
+            },
+        ];
+
+        const inRestrictedZone = restrictedZones.some(
+            (zone) => zone.rows.includes(gridY) && zone.columns.includes(gridX),
+        );
+        if (inRestrictedZone) {
+            console.log(
+                `❌ Cannot build in restricted area at column ${gridX}, row ${gridY}`,
+            );
+            return false;
+        }
+
+        // Convert grid coords to world coords for overlap checks (tower is 1x2 grid cells = 40x80)
+        const x = gridX * gridSize + gridSize / 2; // Center of 1x2 tower
+        const y = gridY * gridSize + gridSize;
+
+        // Prevent building on top of farms (3x3 grid = 120x120)
         let overlapsFarm = false;
         this.farms.forEach((farm) => {
-            const distance = Phaser.Math.Distance.Between(farm.x, farm.y, x, y);
-            if (distance < 80) {
+            // Check if tower overlaps with farm rectangular bounds
+            const farmBounds = {
+                left: farm.x,
+                right: farm.x + 120,
+                top: farm.y,
+                bottom: farm.y + 120,
+            };
+            const towerBounds = {
+                left: gridX * gridSize,
+                right: gridX * gridSize + 40,
+                top: gridY * gridSize,
+                bottom: gridY * gridSize + 80,
+            };
+
+            const overlaps = !(
+                towerBounds.right < farmBounds.left ||
+                towerBounds.left > farmBounds.right ||
+                towerBounds.bottom < farmBounds.top ||
+                towerBounds.top > farmBounds.bottom
+            );
+
+            if (overlaps) {
                 overlapsFarm = true;
             }
         });
@@ -1275,7 +1475,7 @@ export class MainGameScene extends Phaser.Scene {
                 x,
                 y,
             );
-            if (distance < 80) {
+            if (distance < 20) {
                 overlapsTower = true;
             }
         });
@@ -1290,7 +1490,7 @@ export class MainGameScene extends Phaser.Scene {
                 x,
                 y,
             );
-            if (distance < 40) {
+            if (distance < 20) {
                 overlapsTrapTower = true;
             }
         });
@@ -1348,11 +1548,15 @@ export class MainGameScene extends Phaser.Scene {
             goldText.setText(`${Math.floor(newGold)}`);
         }
 
+        // Center trap tower inside grid square (add half grid size)
+        const trapX = x + 20;
+        const trapY = y + 20;
+
         const trapId = `trap-${this.playerNumber}-${trapType}-${Date.now()}`;
         const trapTower = new TrapTower({
             scene: this,
-            x,
-            y,
+            x: trapX,
+            y: trapY,
             trapId,
             trapType,
             playerNumber: this.playerNumber,
@@ -1363,8 +1567,8 @@ export class MainGameScene extends Phaser.Scene {
         if (this.networkManager) {
             this.networkManager.sendAction("build_trap", {
                 trapId,
-                x,
-                y,
+                x: trapX,
+                y: trapY,
                 trapType,
                 playerNumber: this.playerNumber,
             });

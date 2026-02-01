@@ -193,74 +193,51 @@ export class Enemy extends Phaser.GameObjects.Sprite {
                 // Reached side X position, now sharp turn to final target
                 this.enemyState = "moving_to_target";
 
-                // Grid positions: X [11,17,11,17] / [32,38,32,38], Y [4,4,12,12] (40px grid)
-                // Add 20 to center in grid cell (40px cell, center at +20)
-                const leftXPositions = [
-                    11 * 40 + 20,
-                    17 * 40 + 20,
-                    11 * 40 + 20,
-                    17 * 40 + 20,
-                ]; // [460, 700, 460, 700]
-                const rightXPositions = [
-                    32 * 40 + 20,
-                    38 * 40 + 20,
-                    32 * 40 + 20,
-                    38 * 40 + 20,
-                ]; // [1300, 1540, 1300, 1540]
-                const yPositions = [
-                    4 * 40 + 20,
-                    4 * 40 + 20,
-                    12 * 40 + 20,
-                    12 * 40 + 20,
-                ]; // [180, 180, 500, 500]
+                // Farm grid positions: Left [(9,3), (15,3), (9,10), (15,10)], Right [(30,3), (36,3), (30,10), (36,10)]
+                // Farm types: [wheat(yellow), carrot(red), sunflower(blue), potato(green)]
+                // Farms are 3x3 (120px), so center is at grid*40 + 60
+                // Enemy type mapping: 0=Red→Carrot(1), 1=Blue→Sunflower(2), 2=Yellow→Wheat(0), 3=Green→Potato(3)
 
                 // Use seeded random for synchronization across clients
                 const randomOffsetX =
-                    (this.seededRandom(this.enemyId + "X") - 0.5) * 160;
+                    (this.seededRandom(this.enemyId + "X") - 0.5) * 120; // 3x3 farm spread
                 const randomOffsetY =
-                    (this.seededRandom(this.enemyId + "Y") - 0.5) * 160;
+                    (this.seededRandom(this.enemyId + "Y") - 0.5) * 120;
 
                 if (this.enemyType === 0) {
-                    // Type 0 (Red): Grid [11,32] x 4 (top, outer columns)
+                    // Type 0 (Red) → Carrot farm at (15,3) or (36,3)
                     this.targetX =
-                        (this.goingLeft
-                            ? leftXPositions[0]
-                            : rightXPositions[0]) + randomOffsetX;
-                    this.targetY = yPositions[0] + randomOffsetY;
+                        (this.goingLeft ? 15 * 40 + 60 : 36 * 40 + 60) +
+                        randomOffsetX;
+                    this.targetY = 3 * 40 + 60 + randomOffsetY;
                 } else if (this.enemyType === 1) {
-                    // Type 1 (Blue): Grid [17,38] x 4 (top, inner columns)
+                    // Type 1 (Blue) → Sunflower farm at (9,10) or (30,10)
                     this.targetX =
-                        (this.goingLeft
-                            ? leftXPositions[1]
-                            : rightXPositions[1]) + randomOffsetX;
-                    this.targetY = yPositions[1] + randomOffsetY;
+                        (this.goingLeft ? 9 * 40 + 60 : 30 * 40 + 60) +
+                        randomOffsetX;
+                    this.targetY = 10 * 40 + 60 + randomOffsetY;
                 } else if (this.enemyType === 2) {
-                    // Type 2 (Yellow): Grid [11,32] x 12 (bottom, outer columns)
+                    // Type 2 (Yellow) → Wheat farm at (9,3) or (30,3)
                     this.targetX =
-                        (this.goingLeft
-                            ? leftXPositions[2]
-                            : rightXPositions[2]) + randomOffsetX;
-                    this.targetY = yPositions[2] + randomOffsetY;
+                        (this.goingLeft ? 9 * 40 + 60 : 30 * 40 + 60) +
+                        randomOffsetX;
+                    this.targetY = 3 * 40 + 60 + randomOffsetY;
                 } else if (this.enemyType === 3) {
-                    // Type 3 (Green): Grid [17,38] x 12 (bottom, inner columns)
+                    // Type 3 (Green) → Potato farm at (15,10) or (36,10)
                     this.targetX =
-                        (this.goingLeft
-                            ? leftXPositions[3]
-                            : rightXPositions[3]) + randomOffsetX;
-                    this.targetY = yPositions[3] + randomOffsetY;
+                        (this.goingLeft ? 15 * 40 + 60 : 36 * 40 + 60) +
+                        randomOffsetX;
+                    this.targetY = 10 * 40 + 60 + randomOffsetY;
                 }
             } else {
-                // Continue moving straight to side X
-                const angle = Phaser.Math.Angle.Between(
-                    this.x,
-                    this.y,
-                    this.targetX,
-                    this.targetY,
-                );
-                body.setVelocity(
-                    Math.cos(angle) * this.speed,
-                    Math.sin(angle) * this.speed,
-                );
+                // Continue moving straight horizontally to side X
+                if (this.x < this.targetX) {
+                    // Moving right
+                    body.setVelocity(this.speed, 0);
+                } else {
+                    // Moving left
+                    body.setVelocity(-this.speed, 0);
+                }
             }
         } else if (this.enemyState === "moving_to_target") {
             // Move to final target position based on type

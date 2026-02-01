@@ -27,14 +27,16 @@ export class Tower extends Phaser.GameObjects.Sprite {
         this.towerId = config.towerId;
         this.networkManager = config.networkManager;
         this.playerNumber = config.playerNumber;
-        // Create tower visual (blue square 2x2 grid cells = 80x80)
+        // Create tower visual (1x2 grid cells = 40x80)
         const graphics = config.scene.add.graphics();
         graphics.fillStyle(0x6666ff, 1);
-        graphics.fillRect(-40, -40, 80, 80);
-        graphics.generateTexture(`tower-${this.towerId}`, 80, 80);
+        graphics.fillRect(0, 0, 40, 80);
+        graphics.generateTexture(`tower-${this.towerId}`, 40, 80);
         graphics.destroy();
 
         this.setTexture(`tower-${this.towerId}`);
+        this.setOrigin(0, 0);
+        this.setDisplaySize(40, 80);
         config.scene.add.existing(this);
         this.setDepth(5);
 

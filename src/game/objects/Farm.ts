@@ -38,8 +38,8 @@ export class Farm extends Phaser.GameObjects.Rectangle {
             config.scene,
             config.x,
             config.y,
-            160, // 4x4 grid cells
-            160,
+            120, // 3x3 grid cells
+            120,
             color,
             0.3,
         );
@@ -54,10 +54,11 @@ export class Farm extends Phaser.GameObjects.Rectangle {
         config.scene.add.existing(this);
 
         // Visual setup
+        this.setOrigin(0, 0); // Set origin to top-left for grid alignment
         this.setStrokeStyle(3, color, 1);
         this.setDepth(0);
         this.setInteractive(
-            new Phaser.Geom.Rectangle(config.x - 80, config.y - 80, 160, 160),
+            new Phaser.Geom.Rectangle(0, 0, 120, 120),
             Phaser.Geom.Rectangle.Contains,
         );
         this.setData("isClickable", true);
@@ -85,115 +86,35 @@ export class Farm extends Phaser.GameObjects.Rectangle {
     }
 
     private createLevelIndicator() {
+        // Icons disabled - no level indicator
         if (this.levelIcon) {
             this.levelIcon.destroy();
+            this.levelIcon = null;
         }
-
-        this.levelIcon = this.scene.add.graphics();
-        this.levelIcon.setDepth(11);
-        this.updateLevelIcon();
     }
 
     private updateLevelIcon() {
-        if (!this.levelIcon) return;
-
-        this.levelIcon.clear();
-
-        // Draw level indicator at top-left of farm
-        const iconX = this.x - 75;
-        const iconY = this.y - 75;
-
-        if (this.level === 0) {
-            // Draw crop icon based on farm type
-            this.drawCropIcon(iconX, iconY);
-        } else {
-            // Draw level number in a circle
-            this.levelIcon.fillStyle(0xffffff, 0.9);
-            this.levelIcon.fillCircle(iconX, iconY, 12);
-
-            // Level text
-            const levelText = this.scene.add.text(
-                iconX,
-                iconY,
-                this.level.toString(),
-                {
-                    fontSize: "16px",
-                    color: "#000000",
-                    fontStyle: "bold",
-                },
-            );
-            levelText.setOrigin(0.5);
-            levelText.setDepth(12);
-        }
+        // Icons disabled - no level indicator
+        return;
     }
 
     private drawCropIcon(x: number, y: number) {
-        if (!this.levelIcon) return;
-
-        const iconSize = 8;
-
-        switch (this.farmType) {
-            case "wheat":
-                // Golden wheat stalks
-                this.levelIcon.fillStyle(0xffcc00, 1);
-                this.levelIcon.fillRect(x - 2, y - 6, 1, 8);
-                this.levelIcon.fillRect(x + 1, y - 6, 1, 8);
-                // Wheat heads
-                this.levelIcon.fillCircle(x - 2, y - 8, 2);
-                this.levelIcon.fillCircle(x + 1, y - 8, 2);
-                break;
-
-            case "carrot":
-                // Orange carrot
-                this.levelIcon.fillStyle(0xff8800, 1);
-                this.levelIcon.fillTriangle(
-                    x - 3,
-                    y + 3,
-                    x + 3,
-                    y + 3,
-                    x,
-                    y - 5,
-                );
-                // Green tops
-                this.levelIcon.fillStyle(0x00aa00, 1);
-                this.levelIcon.fillTriangle(
-                    x - 2,
-                    y - 5,
-                    x + 2,
-                    y - 5,
-                    x,
-                    y - 10,
-                );
-                break;
-
-            case "sunflower":
-                // Yellow petals
-                this.levelIcon.fillStyle(0xffff00, 1);
-                this.levelIcon.fillCircle(x, y, 5);
-                // Brown center
-                this.levelIcon.fillStyle(0x8b4513, 1);
-                this.levelIcon.fillCircle(x, y, 2);
-                break;
-
-            case "potato":
-                // Brown potato
-                this.levelIcon.fillStyle(0x8b6914, 1);
-                this.levelIcon.fillEllipse(x, y, 6, 4);
-                // Small bumps
-                this.levelIcon.fillStyle(0x654321, 0.8);
-                this.levelIcon.fillCircle(x - 2, y, 1);
-                this.levelIcon.fillCircle(x + 2, y, 1);
-                break;
-        }
+        // Icons disabled - no crop icon
+        return;
     }
 
     private createProductionText() {
-        this.productionText = this.scene.add.text(this.x, this.y - 85, "+0", {
-            fontSize: "20px",
-            color: "#ffffff",
-            fontStyle: "bold",
-            fontFamily: "Arial",
-        });
+        this.productionText = this.scene.add.text(
+            this.x + 60,
+            this.y - 10,
+            "+0",
+            {
+                fontSize: "20px",
+                color: "#ffffff",
+                fontStyle: "bold",
+                fontFamily: "Arial",
+            },
+        );
         this.productionText.setOrigin(0.5, 0.5);
         this.productionText.setDepth(12);
     }
@@ -283,8 +204,14 @@ export class Farm extends Phaser.GameObjects.Rectangle {
                 this.y,
             );
 
-            if (distance < 80) {
-                // 2 tiles radius
+            // Check if enemy is within farm rectangular bounds (3x3 grid = 120x120)
+            const isInFarm =
+                enemy.x >= this.x &&
+                enemy.x <= this.x + 120 &&
+                enemy.y >= this.y &&
+                enemy.y <= this.y + 120;
+
+            if (isInFarm) {
                 this.addEnemyOnFarm(enemyId);
             }
         });

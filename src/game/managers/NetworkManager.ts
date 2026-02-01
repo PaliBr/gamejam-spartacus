@@ -50,6 +50,7 @@ export class NetworkManager {
             "toggle_mask",
             "enemies_killed_batch",
             "toggle_book",
+            "food_gold_sync",
         ];
 
         console.log(`📡 Broadcasting action...`);
@@ -127,7 +128,32 @@ export class NetworkManager {
                     action.action_data.y,
                 );
                 break;
+            case "build_trap":
+                // Emit event for trap tower building
+                window.dispatchEvent(
+                    new CustomEvent("trapBuilt", {
+                        detail: {
+                            trapId: action.action_data.trapId,
+                            x: action.action_data.x,
+                            y: action.action_data.y,
+                            trapType: action.action_data.trapType,
+                            playerNumber: action.action_data.playerNumber,
+                        },
+                    }),
+                );
+                break;
+            case "food_gold_sync":
+                // Emit event for food and gold sync
+                window.dispatchEvent(
+                    new CustomEvent("foodGoldSync", {
+                        detail: {
+                            playerNumber: action.action_data.playerNumber,
+                            food: action.action_data.food,
+                            gold: action.action_data.gold,
+                        },
+                    }),
+                );
+                break;
         }
     }
 }
-

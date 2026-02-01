@@ -72,6 +72,7 @@ export class MainGameScene extends Phaser.Scene {
         [1, 0],
         [2, 0],
     ]);
+    private lastBroadcastedSpeed: number = 1;
 
     constructor() {
         super("MainGameScene");
@@ -445,25 +446,36 @@ export class MainGameScene extends Phaser.Scene {
         this.towerSelectionPopup = new TowerSelectionPopup(this);
 
         this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-            // Close tower selection popup if clicking outside
+            // Close tower selection popup only if clicking outside of it
             if (
                 this.towerSelectionPopup &&
                 this.towerSelectionPopup.isActive()
             ) {
-                this.towerSelectionPopup.hide();
-                return;
+                // Check if click is within popup bounds
+                const isClickOnPopup = this.isClickWithinTowerPopup(pointer);
+                if (!isClickOnPopup) {
+                    this.towerSelectionPopup.hide();
+                    return;
+                }
             }
 
-            // Close farm popup if clicking outside
+            // Close farm popup only if clicking outside of it
             if (this.farmPopup && this.farmPopup.isActive()) {
-                this.farmPopup.hide();
-                return;
+                const isClickOnPopup = this.isClickWithinFarmPopup(pointer);
+                if (!isClickOnPopup) {
+                    this.farmPopup.hide();
+                    return;
+                }
             }
 
-            // Close tower popup if clicking outside
+            // Close tower popup only if clicking outside of it
             if (this.towerPopup && this.towerPopup.isActive()) {
-                this.towerPopup.hide();
-                return;
+                const isClickOnPopup =
+                    this.isClickWithinTowerInfoPopup(pointer);
+                if (!isClickOnPopup) {
+                    this.towerPopup.hide();
+                    return;
+                }
             }
 
             // Check if clicking on a farm
@@ -690,12 +702,21 @@ export class MainGameScene extends Phaser.Scene {
         // Listen for food/gold sync events
         const handleFoodGoldSync = (event: Event) => {
             const customEvent = event as CustomEvent;
-            const { playerNumber, food, gold } = customEvent.detail;
+            const { playerNumber, food, gold, speedMultiplier } =
+                customEvent.detail;
 
             if (playerNumber !== this.playerNumber) {
                 this.playerFood.set(playerNumber, food);
                 this.playerTotalFood.set(playerNumber, food);
                 this.playerGold.set(playerNumber, gold);
+
+                // Apply speed multiplier if provided
+                if (speedMultiplier !== undefined) {
+                    const remoteChar = this.characters.get(playerNumber);
+                    if (remoteChar) {
+                        remoteChar.setSpeedMultiplier(speedMultiplier);
+                    }
+                }
 
                 // Update gold display if exists
                 const goldText = this.goldTexts.get(playerNumber);
@@ -899,101 +920,127 @@ export class MainGameScene extends Phaser.Scene {
             farm.update(dt, this.enemies);
         });
 
-        // Apply farm production deltas to player food
+        // Track food changes for broadcasting
+        const foodBefore = this.playerFood.get(this.playerNumber) || 0;
+
+        // Apply farm production deltas to local player food
         this.farms.forEach((farm) => {
-            const last = this.farmLastFood.get(farm.farmId) || 0;
-            const delta = farm.totalFood - last;
-            if (delta > 0) {
-                const currentFood = this.playerFood.get(farm.playerNumber) || 0;
-                const nextFood = Math.round((currentFood + delta) * 10) / 10;
-                this.playerFood.set(farm.playerNumber, nextFood);
-            }
-            this.farmLastFood.set(farm.farmId, farm.totalFood);
-        });
-
-        // Food consumption system (per player)
-        [1, 2].forEach((playerNum) => {
-            const consumptionTimer = this.consumptionTimers.get(playerNum) || 0;
-            const newTimer = consumptionTimer + dt;
-
-            if (newTimer >= 5000) {
-                // Calculate consumption based on game time (adds 2 each minute, max 16)
-                const minutesPassed = Math.floor(this.gameTime / 60000);
-                const baseConsumption = Math.min(2 + 2 * minutesPassed, 16);
-                const hitCount = this.cityTargetHitCount.get(playerNum) || 0;
-                const consumptionMultiplier = 1 + hitCount * 0.02;
-                const scaledConsumption =
-                    Math.round(baseConsumption * consumptionMultiplier * 10) /
-                    10;
-
-                const currentFood = this.playerFood.get(playerNum) || 0;
-                const nextFood = Math.max(0, currentFood - scaledConsumption);
-                const roundedNextFood = Math.round(nextFood * 10) / 10;
-                this.playerFood.set(playerNum, roundedNextFood);
-                this.consumptionTimers.set(playerNum, newTimer - 5000);
-
-                // Show floating text for food consumption
-                this.showFloatingText(
-                    playerNum,
-                    `-${scaledConsumption}`,
-                    0xff0000,
-                    "food",
-                );
-
-                console.log(
-                    `🍽️ Player ${playerNum} consumed ${scaledConsumption} food (minute ${minutesPassed}). Remaining: ${roundedNextFood.toFixed(1)}`,
-                );
-            } else {
-                this.consumptionTimers.set(playerNum, newTimer);
-            }
-        });
-
-        // Gold production system (per player) - same timing and scaling as food consumption
-        [1, 2].forEach((playerNum) => {
-            const goldTimer = this.goldProductionTimers.get(playerNum) || 0;
-            const newTimer = goldTimer + dt;
-
-            if (newTimer >= 5000) {
-                // Calculate gold production based on game time (same as consumption: 2 + 2*minute, max 16)
-                const minutesPassed = Math.floor(this.gameTime / 60000);
-                const goldProduction = Math.min(2 + 2 * minutesPassed, 16);
-
-                const currentGold = this.playerGold.get(playerNum) || 0;
-                const nextGold =
-                    Math.round((currentGold + goldProduction) * 10) / 10;
-                this.playerGold.set(playerNum, nextGold);
-                this.goldProductionTimers.set(playerNum, newTimer - 5000);
-
-                // Update gold display
-                const goldText = this.goldTexts.get(playerNum);
-                if (goldText) {
-                    goldText.setText(`${Math.floor(nextGold)}`);
+            if (farm.playerNumber === this.playerNumber) {
+                const last = this.farmLastFood.get(farm.farmId) || 0;
+                const delta = farm.totalFood - last;
+                if (delta > 0) {
+                    const currentFood =
+                        this.playerFood.get(farm.playerNumber) || 0;
+                    const nextFood =
+                        Math.round((currentFood + delta) * 10) / 10;
+                    this.playerFood.set(farm.playerNumber, nextFood);
                 }
-
-                // Show floating text for gold production
-                this.showFloatingText(
-                    playerNum,
-                    `+${goldProduction}`,
-                    0xffd700,
-                    "gold",
-                );
-
-                console.log(
-                    `💰 Player ${playerNum} produced ${goldProduction} gold (minute ${minutesPassed}). Total: ${Math.floor(nextGold)}`,
-                );
-
-                // Sync food and gold to other players
-                if (this.networkManager && playerNum === this.playerNumber) {
-                    this.networkManager.sendAction("food_gold_sync", {
-                        playerNumber: playerNum,
-                        food: this.playerFood.get(playerNum) || 0,
-                        gold: nextGold,
-                    });
-                }
-            } else {
-                this.goldProductionTimers.set(playerNum, newTimer);
+                this.farmLastFood.set(farm.farmId, farm.totalFood);
             }
         });
+
+        const foodAfterProduction = this.playerFood.get(this.playerNumber) || 0;
+        const foodChanged = foodAfterProduction !== foodBefore;
+
+        // Food consumption system (local player only)
+        let foodConsumptionHappened = false;
+        const consumptionTimer =
+            this.consumptionTimers.get(this.playerNumber) || 0;
+        const consumptionNewTimer = consumptionTimer + dt;
+
+        if (consumptionNewTimer >= 5000) {
+            // Calculate consumption based on game time (adds 2 each minute, max 16)
+            const minutesPassed = Math.floor(this.gameTime / 60000);
+            const baseConsumption = Math.min(2 + 2 * minutesPassed, 16);
+            const hitCount =
+                this.cityTargetHitCount.get(this.playerNumber) || 0;
+            const consumptionMultiplier = 1 + hitCount * 0.02;
+            const scaledConsumption =
+                Math.round(baseConsumption * consumptionMultiplier * 10) / 10;
+
+            const currentFood = this.playerFood.get(this.playerNumber) || 0;
+            const nextFood = Math.max(0, currentFood - scaledConsumption);
+            const roundedNextFood = Math.round(nextFood * 10) / 10;
+            this.playerFood.set(this.playerNumber, roundedNextFood);
+            this.consumptionTimers.set(
+                this.playerNumber,
+                consumptionNewTimer - 5000,
+            );
+            foodConsumptionHappened = true;
+
+            // Show floating text for food consumption
+            this.showFloatingText(
+                this.playerNumber,
+                `-${scaledConsumption}`,
+                0xff0000,
+                "food",
+            );
+
+            console.log(
+                `🍽️ Player ${this.playerNumber} consumed ${scaledConsumption} food (minute ${minutesPassed}). Remaining: ${roundedNextFood.toFixed(1)}`,
+            );
+        } else {
+            this.consumptionTimers.set(this.playerNumber, consumptionNewTimer);
+        }
+
+        // Gold production system (local player only)
+        let goldProductionHappened = false;
+        const goldTimer = this.goldProductionTimers.get(this.playerNumber) || 0;
+        const goldNewTimer = goldTimer + dt;
+
+        if (goldNewTimer >= 5000) {
+            // Calculate gold production based on game time (same as consumption: 2 + 2*minute, max 16)
+            const minutesPassed = Math.floor(this.gameTime / 60000);
+            const goldProduction = Math.min(2 + 2 * minutesPassed, 16);
+
+            const currentGold = this.playerGold.get(this.playerNumber) || 0;
+            const nextGold =
+                Math.round((currentGold + goldProduction) * 10) / 10;
+            this.playerGold.set(this.playerNumber, nextGold);
+            this.goldProductionTimers.set(
+                this.playerNumber,
+                goldNewTimer - 5000,
+            );
+            goldProductionHappened = true;
+
+            // Update gold display
+            const goldText = this.goldTexts.get(this.playerNumber);
+            if (goldText) {
+                goldText.setText(`${Math.floor(nextGold)}`);
+            }
+
+            // Show floating text for gold production
+            this.showFloatingText(
+                this.playerNumber,
+                `+${goldProduction}`,
+                0xffd700,
+                "gold",
+            );
+
+            console.log(
+                `💰 Player ${this.playerNumber} produced ${goldProduction} gold (minute ${minutesPassed}). Total: ${Math.floor(nextGold)}`,
+            );
+        } else {
+            this.goldProductionTimers.set(this.playerNumber, goldNewTimer);
+        }
+
+        // Broadcast state changes if anything changed (farm production, consumption, or gold production)
+        if (
+            this.networkManager &&
+            (foodChanged || foodConsumptionHappened || goldProductionHappened)
+        ) {
+            const localChar = this.characters.get(this.playerNumber);
+            const speedMultiplier = localChar
+                ? localChar.getSpeedMultiplier()
+                : 1;
+
+            this.networkManager.sendAction("food_gold_sync", {
+                playerNumber: this.playerNumber,
+                food: this.playerFood.get(this.playerNumber) || 0,
+                gold: this.playerGold.get(this.playerNumber) || 0,
+                speedMultiplier: speedMultiplier,
+            });
+        }
 
         // Update food bar display
         this.updateFoodBar();
@@ -1585,10 +1632,18 @@ export class MainGameScene extends Phaser.Scene {
 
         if (!char) return;
 
-        if (totalFood <= 0) {
-            char.setSpeedMultiplier(0.5);
-        } else {
-            char.setSpeedMultiplier(1);
+        const newSpeed = totalFood <= 0 ? 0.5 : 1;
+        char.setSpeedMultiplier(newSpeed);
+
+        // Broadcast speed change if it changed
+        if (newSpeed !== this.lastBroadcastedSpeed && this.networkManager) {
+            this.lastBroadcastedSpeed = newSpeed;
+            this.networkManager.sendAction("food_gold_sync", {
+                playerNumber: this.playerNumber,
+                food: this.playerFood.get(this.playerNumber) || 0,
+                gold: this.playerGold.get(this.playerNumber) || 0,
+                speedMultiplier: newSpeed,
+            });
         }
     }
 
@@ -1969,6 +2024,65 @@ export class MainGameScene extends Phaser.Scene {
         console.log(
             `✅ Built trap tower type ${trapType} for ${trapCost} gold`,
         );
+    }
+
+    private isClickWithinTowerPopup(pointer: Phaser.Input.Pointer): boolean {
+        // Tower selection popup is 160px wide, 200px tall
+        // Positioned at screen coordinates (roughly)
+        if (!this.towerSelectionPopup || !this.towerSelectionPopup.isActive()) {
+            return false;
+        }
+
+        // The popup is shown at grid position (x, y), but we need screen coordinates
+        // For now, check if any game object at the pointer position is interactive
+        // This is handled by Phaser's input system automatically
+        // If the click reached a button in the popup, stopPropagation was called
+        // We need to detect if the click is within the popup container bounds
+
+        // Check if any interactive object was hit
+        const hitAreas = this.input.hitTestPointer(pointer);
+        for (const gameObject of hitAreas) {
+            // Check if the object is part of a popup (has high depth value indicating UI)
+            const obj = gameObject as any;
+            if (obj.depth !== undefined && obj.depth >= 2000) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private isClickWithinFarmPopup(pointer: Phaser.Input.Pointer): boolean {
+        if (!this.farmPopup || !this.farmPopup.isActive()) {
+            return false;
+        }
+
+        // Check if any interactive UI object was hit
+        const hitAreas = this.input.hitTestPointer(pointer);
+        for (const gameObject of hitAreas) {
+            const obj = gameObject as any;
+            if (obj.depth !== undefined && obj.depth >= 2000) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private isClickWithinTowerInfoPopup(
+        pointer: Phaser.Input.Pointer,
+    ): boolean {
+        if (!this.towerPopup || !this.towerPopup.isActive()) {
+            return false;
+        }
+
+        // Check if any interactive UI object was hit
+        const hitAreas = this.input.hitTestPointer(pointer);
+        for (const gameObject of hitAreas) {
+            const obj = gameObject as any;
+            if (obj.depth !== undefined && obj.depth >= 2000) {
+                return true;
+            }
+        }
+        return false;
     }
 }
 

@@ -47,6 +47,10 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         return this.isMoving;
     }
 
+    getSpeedMultiplier(): number {
+        return this.speedMultiplier;
+    }
+
     setSpeedMultiplier(multiplier: number) {
         const clamped = Math.max(0, multiplier);
         this.speedMultiplier = clamped;

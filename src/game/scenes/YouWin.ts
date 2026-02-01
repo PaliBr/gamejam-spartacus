@@ -7,7 +7,7 @@ export class YouWin extends Scene {
     }
 
     preload() {
-        this.load.audio("winningMusic", "assets/winning.mp3");
+        this.load.audio("winningMusic", "assets/winnig.mp3");
         this.load.on("loaderror", (file: Phaser.Loader.File) => {
             if (file.key === "winningMusic") {
                 console.warn("⚠️ Failed to load winningMusic", file);

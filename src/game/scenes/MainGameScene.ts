@@ -102,6 +102,9 @@ export class MainGameScene extends Phaser.Scene {
     // Book access flag
     private hasBookAccess: boolean = false;
 
+    // Enemy spawn timer
+    private enemySpawnTimer: Phaser.Time.TimerEvent | null = null;
+
     constructor() {
         super("MainGameScene");
     }
@@ -950,11 +953,21 @@ export class MainGameScene extends Phaser.Scene {
 
         window.addEventListener("gameWon", handleGameWon);
 
-        // Player 1 spawns the initial 20 enemies
+        // Player 1 spawns enemies every 10 seconds
         if (this.playerNumber === 1) {
-            // Spawn after a short delay to ensure everything is set up
+            // Spawn initial enemies after a short delay
             this.time.delayedCall(1000, () => {
                 this.spawnInitialEnemies();
+            });
+
+            // Set up recurring spawn every 10 seconds
+            this.enemySpawnTimer = this.time.addEvent({
+                delay: 10000, // 10 seconds
+                callback: () => {
+                    this.spawnInitialEnemies();
+                },
+                loop: true,
+                startAt: 10000, // Start first loop after 10 seconds from now
             });
         }
 
@@ -1388,6 +1401,12 @@ export class MainGameScene extends Phaser.Scene {
     }
 
     shutdown() {
+        // Clean up enemy spawn timer
+        if (this.enemySpawnTimer) {
+            this.enemySpawnTimer.remove();
+            this.enemySpawnTimer = null;
+        }
+
         this.characters.forEach((char) => {
             char.destroy();
         });

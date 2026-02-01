@@ -173,6 +173,30 @@ export function GameCanvas({
                                 towerId: payload.action_data.towerId,
                                 x: payload.action_data.x,
                                 y: payload.action_data.y,
+                                playerNumber: payload.action_data.playerNumber,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "build_trap") {
+                    window.dispatchEvent(
+                        new CustomEvent("trapBuilt", {
+                            detail: {
+                                playerId: payload.player_id,
+                                trapId: payload.action_data.trapId,
+                                x: payload.action_data.x,
+                                y: payload.action_data.y,
+                                trapType: payload.action_data.trapType,
+                                playerNumber: payload.action_data.playerNumber,
+                            },
+                        }),
+                    );
+                } else if (payload.action_type === "food_gold_sync") {
+                    window.dispatchEvent(
+                        new CustomEvent("foodGoldSync", {
+                            detail: {
+                                playerNumber: payload.action_data.playerNumber,
+                                food: payload.action_data.food,
+                                gold: payload.action_data.gold,
                             },
                         }),
                     );

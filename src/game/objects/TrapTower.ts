@@ -42,23 +42,24 @@ export class TrapTower extends Phaser.GameObjects.Sprite {
             color = 0x00ff00; // Green for type 3
         }
 
-        // Draw trap with pattern
+        // Draw trap with pattern (fill entire 40x40 texture)
         graphics.fillStyle(color, 0.6);
-        graphics.fillRect(-20, -20, 40, 40);
+        graphics.fillRect(0, 0, 40, 40);
 
         // Add border
         graphics.lineStyle(2, color, 1);
-        graphics.strokeRect(-20, -20, 40, 40);
+        graphics.strokeRect(0, 0, 40, 40);
 
         // Add trap pattern (crosshatch)
         graphics.lineStyle(1, 0x000000, 0.5);
-        graphics.lineBetween(-20, -20, 20, 20);
-        graphics.lineBetween(-20, 20, 20, -20);
+        graphics.lineBetween(0, 0, 40, 40);
+        graphics.lineBetween(0, 40, 40, 0);
 
         graphics.generateTexture(`trap-${this.trapId}`, 40, 40);
         graphics.destroy();
 
         this.setTexture(`trap-${this.trapId}`);
+        this.setOrigin(0.5, 0.5); // Center the sprite on the grid position
         config.scene.add.existing(this);
         this.setDepth(5);
 

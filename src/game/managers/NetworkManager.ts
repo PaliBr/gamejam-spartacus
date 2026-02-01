@@ -55,6 +55,11 @@ export class NetworkManager {
             "tower_upgrade",
             "trap_upgrade",
             "game_state_sync",
+            "spawn_elements",
+            "element_pickup",
+            "mask_activated",
+            "mask_expired",
+            "book_activated",
         ];
 
         console.log(`📡 Broadcasting action...`);

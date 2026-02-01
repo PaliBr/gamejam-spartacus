@@ -78,7 +78,7 @@ export class MainGameScene extends Phaser.Scene {
     // Spawnable elements (food, mask, book)
     spawnableElements: Map<string, SpawnableElement> = new Map();
     private elementSpawnTimer: number = 0;
-    private elementSpawnInterval: number = Phaser.Math.Between(3000, 6000); // 3-6 seconds
+    private elementSpawnInterval: number = Phaser.Math.Between(2000, 3000); // 2-3 seconds
 
     // Player power-ups (mask and book counts)
     playerMaskCount: Map<number, number> = new Map([

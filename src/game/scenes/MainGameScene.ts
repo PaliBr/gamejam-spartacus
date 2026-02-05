@@ -294,12 +294,94 @@ export class MainGameScene extends Phaser.Scene {
             });
         }
 
+        // Load enemy spritesheet (locust, 3 frames, 40x40 each)
+        if (!this.textures.exists("enemy0")) {
+            this.load.spritesheet("enemy0", "/assets/locust.png", {
+                frameWidth: 40,
+                frameHeight: 40,
+            });
+        }
+
+        if (!this.textures.exists("enemy1")) {
+            this.load.spritesheet("enemy1", "/assets/bird.png", {
+                frameWidth: 40,
+                frameHeight: 40,
+            });
+        }
+
+        if (!this.textures.exists("enemy2")) {
+            this.load.spritesheet("enemy2", "assets/rabit.png", {
+                frameWidth: 40,
+                frameHeight: 40,
+            });
+        }
+
         // Load game music
         this.load.audio("gameMusic1", "assets/inGame1.mp3");
         this.load.audio("gameMusic2", "assets/Flute.mp3");
     }
 
     create() {
+        // Create a simple animation for the enemy character using the loaded spritesheet
+        if (!this.anims.exists("enemy0_walk")) {
+            this.anims.create({
+                key: "enemy0_idle",
+                frames: this.anims.generateFrameNumbers("enemy0", {
+                    start: 0,
+                    end: 0,
+                }),
+                frameRate: 1,
+                repeat: -1,
+            });
+            this.anims.create({
+                key: "enemy0_walk",
+                frames: this.anims.generateFrameNumbers("enemy0", {
+                    start: 0,
+                    end: 2,
+                }),
+                frameRate: 3,
+                repeat: -1,
+            });
+        }
+        if (!this.anims.exists("enemy1_walk")) {
+            this.anims.create({
+                key: "enemy1_idle",
+                frames: this.anims.generateFrameNumbers("enemy1", {
+                    start: 0,
+                    end: 0,
+                }),
+                frameRate: 1,
+                repeat: -1,
+            });
+            this.anims.create({
+                key: "enemy1_walk",
+                frames: this.anims.generateFrameNumbers("enemy1", {
+                    start: 0,
+                    end: 2,
+                }),
+                frameRate: 3,
+                repeat: -1,
+            });
+        }
+        if (!this.anims.exists("enemy2_walk")) {
+            this.anims.create({
+                key: "enemy2_idle",
+                frames: this.anims.generateFrameNumbers("enemy2", {
+                    start: 0,
+                    end: 0,
+                }),
+            });
+
+            this.anims.create({
+                key: "enemy2_walk",
+                frames: this.anims.generateFrameNumbers("enemy2", {
+                    start: 0,
+                    end: 2,
+                }),
+                frameRate: 3,
+                repeat: -1,
+            });
+        }
         // Start music alternating system with gameMusic1
         this.playNextMusic();
 

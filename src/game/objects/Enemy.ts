@@ -49,24 +49,32 @@ export class Enemy extends Phaser.GameObjects.Sprite {
         this.enemyType = config.enemyType || 0;
         this.startTime = config.startTime || 0;
 
-        // Create colored squares based on type (20x20 = 0.5x0.5 grid cell)
-        const graphics = config.scene.add.graphics();
-        let color = 0xff0000; // Red for type 0
-        if (this.enemyType === 1) {
-            color = 0x0000ff; // Blue for type 1
+        if (this.enemyType === 0) {
+            this.setTexture("enemy0");
+            this.setDisplaySize(40, 40); // Scale to 20x20 pixels
+            this.play("enemy0_walk");
+        } else if (this.enemyType === 1) {
+            this.setTexture("enemy1");
+            this.setDisplaySize(40, 40);
+            this.play("enemy1_walk");
         } else if (this.enemyType === 2) {
-            color = 0xffff00; // Yellow for type 2
-        } else if (this.enemyType === 3) {
-            color = 0x00ff00; // Green for type 3
+            this.setTexture("enemy2");
+            this.setDisplaySize(40, 40);
+            this.play("enemy2_walk");
+        } else {
+            const graphics = config.scene.add.graphics();
+            let color = 0x00ff00; // Default to green for type 3
+            if (this.enemyType === 3) {
+                color = 0x00ff00; // Green for type 3
+            }
+
+            graphics.fillStyle(color, 1);
+            graphics.fillRect(0, 0, 20, 20);
+            graphics.generateTexture(`enemy-${this.enemyId}`, 20, 20);
+            graphics.destroy();
+
+            this.setTexture(`enemy-${this.enemyId}`);
         }
-
-        graphics.fillStyle(color, 1);
-        graphics.fillRect(0, 0, 20, 20);
-        graphics.generateTexture(`enemy-${this.enemyId}`, 20, 20);
-        graphics.destroy();
-
-        this.setTexture(`enemy-${this.enemyId}`);
-
         config.scene.add.existing(this);
         config.scene.physics.add.existing(this);
 
@@ -293,6 +301,10 @@ export class Enemy extends Phaser.GameObjects.Sprite {
                     Math.sin(angle) * this.speed,
                 );
             }
+        }
+        // Update animation based on movement
+        if (this.enemyType === 0 && this.anims) {
+            this.play("enemy0_walk", true);
         }
     }
 

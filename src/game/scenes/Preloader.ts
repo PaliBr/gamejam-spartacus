@@ -61,14 +61,6 @@ export class Preloader extends Scene {
         //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
         //  For example, you can define global animations here, so we can use them in other scenes.
 
-        // Create a simple character sprite (placeholder)
-        // This creates a 32x32 red rectangle as the character
-        const graphics = this.add.graphics();
-        graphics.fillStyle(0xff0000, 1);
-        graphics.fillRect(0, 0, 32, 32);
-        graphics.generateTexture("character", 32, 32);
-        graphics.destroy();
-
         //  Move to the MainMenu. You could also swap this for a Scene Transition, such as a camera fade.
         this.scene.start("MainMenu");
     }

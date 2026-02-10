@@ -135,78 +135,10 @@ export class MainGameScene extends Phaser.Scene {
 
         // Create farmer character sprite sheet if not already created
         if (!this.textures.exists("farmer")) {
-            const frameWidth = 40;
-            const frameHeight = 80;
-            const totalFrames = 4; // 4 walking frames
-
-            const graphics = this.add.graphics();
-
-            // Draw all 4 frames side by side WITHOUT clearing between frames
-            for (let i = 0; i < totalFrames; i++) {
-                const xOffset = i * frameWidth;
-                const legOffset = i % 2 === 0 ? 0 : 5; // Leg movement
-                const armOffset = i % 2 === 0 ? 0 : -5; // Arm movement
-
-                // Body (brown)
-                graphics.fillStyle(0x8b4513, 1);
-                graphics.fillRect(xOffset + 10, 20, 20, 35);
-
-                // Head (peach)
-                graphics.fillStyle(0xffdbac, 1);
-                graphics.fillCircle(xOffset + 20, 15, 8);
-
-                // Hat (straw yellow)
-                graphics.fillStyle(0xf4a460, 1);
-                graphics.fillRect(xOffset + 12, 5, 16, 4);
-                graphics.fillRect(xOffset + 15, 8, 10, 3);
-
-                // Left arm
-                graphics.fillStyle(0xffdbac, 1);
-                graphics.fillRect(xOffset + 5, 25 + armOffset, 5, 15);
-
-                // Right arm
-                graphics.fillRect(xOffset + 30, 25 - armOffset, 5, 15);
-
-                // Left leg
-                graphics.fillStyle(0x654321, 1);
-                graphics.fillRect(xOffset + 12, 55, 6, 20 + legOffset);
-
-                // Right leg
-                graphics.fillRect(xOffset + 22, 55, 6, 20 - legOffset);
-
-                // Feet (darker brown)
-                graphics.fillStyle(0x3e2723, 1);
-                graphics.fillRect(xOffset + 12, 73 + legOffset, 6, 4);
-                graphics.fillRect(xOffset + 22, 73 - legOffset, 6, 4);
-            }
-
-            graphics.generateTexture(
-                "farmer",
-                frameWidth * totalFrames,
-                frameHeight,
-            );
-            graphics.destroy();
-
-            // Add the texture as a sprite sheet with frame configuration
-            const texture = this.textures.get("farmer");
-            texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-            // Add frame definitions to the texture
-            texture.add(
-                "__BASE",
-                0,
-                0,
-                0,
-                frameWidth * totalFrames,
-                frameHeight,
-            );
-            for (let i = 0; i < totalFrames; i++) {
-                texture.add(i, 0, i * frameWidth, 0, frameWidth, frameHeight);
-            }
-
-            console.log("✅ Farmer sprite sheet created in MainGameScene");
-        } else {
-            console.log("✅ farmer texture already exists");
+            this.load.spritesheet("farmer", "assets/player_2x.png", {
+                frameWidth: 32,
+                frameHeight: 32,
+            });
         }
 
         // Create spawnable elements texture (food, mask, book)
@@ -263,29 +195,6 @@ export class MainGameScene extends Phaser.Scene {
             console.log("✅ Spawnable elements texture created");
         }
 
-        // Create walking animation if not exists
-        if (!this.anims.exists("farmer_walk")) {
-            this.anims.create({
-                key: "farmer_walk",
-                frames: this.anims.generateFrameNumbers("farmer", {
-                    start: 0,
-                    end: 3,
-                }),
-                frameRate: 8,
-                repeat: -1,
-            });
-        }
-
-        // Create idle animation
-        if (!this.anims.exists("farmer_idle")) {
-            this.anims.create({
-                key: "farmer_idle",
-                frames: [{ key: "farmer", frame: 0 }],
-                frameRate: 1,
-                repeat: -1,
-            });
-        }
-
         // Load tower spritesheet (7 frames, 120x120 each)
         if (!this.textures.exists("tower")) {
             this.load.spritesheet("tower", "/assets/tower.png", {
@@ -322,6 +231,29 @@ export class MainGameScene extends Phaser.Scene {
     }
 
     create() {
+        // Create animations after loading spritesheets
+        // Create walking animation if not exists
+        if (!this.anims.exists("farmer_walk")) {
+            this.anims.create({
+                key: "farmer_walk",
+                frames: this.anims.generateFrameNumbers("farmer", {
+                    start: 0,
+                    end: 2,
+                }),
+                frameRate: 8,
+                repeat: -1,
+            });
+        }
+
+        // Create idle animation
+        if (!this.anims.exists("farmer_idle")) {
+            this.anims.create({
+                key: "farmer_idle",
+                frames: [{ key: "farmer", frame: 0 }],
+                frameRate: 1,
+                repeat: -1,
+            });
+        }
         // Create a simple animation for the enemy character using the loaded spritesheet
         if (!this.anims.exists("enemy0_walk")) {
             this.anims.create({

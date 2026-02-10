@@ -72,7 +72,7 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         config.scene.physics.add.existing(this);
 
         // Visual setup - 40x80 (1x2 grid cells)
-        this.setDisplaySize(40, 80);
+        this.setDisplaySize(64, 64);
         this.setCollideWorldBounds(true);
         this.setBounce(0.2);
         this.setDepth(10); // Make sure character appears above other layers
@@ -274,10 +274,10 @@ export class Character extends Phaser.Physics.Arcade.Sprite {
         this.setVelocity(vx, vy);
 
         // Flip character based on horizontal movement direction
-        if (Math.abs(dx) > 5) {
+        /*  if (Math.abs(dx) > 5) {
             // Only flip if moving significantly horizontally
             this.setFlipX(dx < 0); // Flip when moving left
-        }
+        } */
 
         // Update mask position to follow character
         this.updateMaskVisual();

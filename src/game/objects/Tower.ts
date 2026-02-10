@@ -46,7 +46,7 @@ export class Tower extends Phaser.GameObjects.Sprite {
         this.setTexture("tower");
         this.setFrame(0); // Start at frame 0 (idle state)
         this.setOrigin(0, 0);
-        this.setDisplaySize(40, 80); // 1x2 grid cells
+        this.setDisplaySize(80, 80); // 1x2 grid cells
         config.scene.add.existing(this);
         this.setDepth(5);
         this.setInteractive(
